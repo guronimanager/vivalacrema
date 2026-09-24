@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales        Sale[]
+  expenses     Expense[]
+  bankAccounts BankAccount[]
+  transactions Transaction[]
+  suppliers    Supplier[]
+  employees    Employee[]
+  taxes        Tax[]
+}
+
+model Sale {
+  id         String   @id @default(cuid())
+  businessId String
+  date       DateTime
+  cash       Decimal  @default(0) @db.Decimal(12, 2)
+  card       Decimal  @default(0) @db.Decimal(12, 2)
+  online     Decimal  @default(0) @db.Decimal(12, 2)
+  total      Decimal  @db.Decimal(12, 2)
+  source     String?
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, date])
+  @@unique([source, externalId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  businessId  String
+  date        DateTime
+  category    String
+  description String?
+  amount      Decimal  @db.Decimal(12, 2)
+  paymentType String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, date])
+}
+
+model BankAccount {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  bankName   String?
+  iban       String?
+  balance    Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  businessId    String
+  bankAccountId String?
+  date          DateTime
+  type          TransactionType
+  category      String?
+  description   String?
+  amount        Decimal  @db.Decimal(14, 2)
+  source        String?
+  externalId    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, date])
+  @@unique([source, externalId])
+}
+
+model Supplier {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  taxNumber  String?
+  phone      String?
+  email      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Employee {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  role       String?
+  salary     Decimal  @default(0) @db.Decimal(12, 2)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Tax {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  period     String?
+  dueDate    DateTime?
+  amount     Decimal  @db.Decimal(12, 2)
+  paid       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
