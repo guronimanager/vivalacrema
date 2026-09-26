@@ -39,6 +39,9 @@ export default function ExpensesPage() {
   const [category, setCategory] = useState("Hammadde");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(
+  new Date().toLocaleDateString("en-CA")
+);
   const [paymentType, setPaymentType] = useState("BANK");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -72,6 +75,7 @@ export default function ExpensesPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          date,
           category,
           description,
           amount: Number(amount),
@@ -123,6 +127,19 @@ export default function ExpensesPage() {
             </h2>
 
             <div className="space-y-5">
+            <div>
+  <label className="mb-2 block text-sm text-zinc-400">
+    Tarih
+  </label>
+
+  <input
+    type="date"
+    value={date}
+    onChange={(e) => setDate(e.target.value)}
+    required
+    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
+  />
+</div>
               <div>
                 <label className="mb-2 block text-sm text-zinc-400">
                   Kategori
