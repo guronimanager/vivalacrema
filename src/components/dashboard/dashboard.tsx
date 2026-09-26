@@ -33,17 +33,17 @@ type DashboardData = {
 
 
 const expenses = [
-  { label: "Hammadde", value: "₺0", width: "0%" },
-  { label: "Personel", value: "₺0", width: "0%" },
-  { label: "Kira", value: "₺0", width: "0%" },
-  { label: "Vergiler", value: "₺0", width: "0%" },
-  { label: "Diğer", value: "₺0", width: "0%" },
+{ label: "Hammadde", value: "€0", width: "0%" },
+{ label: "Personel", value: "€0", width: "0%" },
+{ label: "Kira", value: "€0", width: "0%" },
+{ label: "Vergiler", value: "€0", width: "0%" },
+{ label: "Diğer", value: "€0", width: "0%" },
 ];
 
 function money(value: number) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
-    currency: "TRY",
+    currency: "EUR",
     maximumFractionDigits: 0,
   }).format(value);
 }

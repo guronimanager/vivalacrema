@@ -18,6 +18,61 @@ export async function GET() {
       1
     );
 
+    const startDate = monthStart.toISOString().slice(0, 10);
+    const endDate = nextMonthStart.toISOString().slice(0, 10);
+
+let tillhubData = {
+  cashTotal: 0,
+  cardTotal: 0,
+  total: 0,
+  cashCount: 0,
+  cardCount: 0,
+  paymentCount: 0,
+};
+let tillhubDaily: { date: string; revenue: number }[] = [];
+
+try {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    "http://localhost:3000";
+
+  const tillhubResponse = await fetch(
+    `${baseUrl}/api/integrations/tillhub/payments-top?start=${startDate}&end=${endDate}`,
+    {
+      cache: "no-store",
+    }
+  );
+
+  if (tillhubResponse.ok) {
+    const result = await tillhubResponse.json();
+
+    tillhubData = {
+      cashTotal: Number(result?.cashTotal ?? 0),
+      cardTotal: Number(result?.cardTotal ?? 0),
+      total: Number(result?.total ?? 0),
+      cashCount: Number(result?.cashCount ?? 0),
+      cardCount: Number(result?.cardCount ?? 0),
+      paymentCount: Number(result?.paymentCount ?? 0),
+    };
+const transactionsResponse = await fetch(
+  `${baseUrl}/api/integrations/tillhub/transactions?start=${startDate}&end=${endDate}`,
+  {
+    cache: "no-store",
+  }
+);
+
+if (transactionsResponse.ok) {
+  const transactionsResult = await transactionsResponse.json();
+
+  tillhubDaily = Array.isArray(transactionsResult?.daily)
+    ? transactionsResult.daily
+    : [];
+}
+  }
+} catch (error) {
+  console.error("TillHub dashboard fetch error:", error);
+}
+
     const [sales, expenses, bankAccounts] = await Promise.all([
       prisma.sale.findMany({
         where: {
@@ -87,14 +142,16 @@ export async function GET() {
       (_, index) => {
         const day = index + 1;
 
-        const daySales = sales
-          .filter((sale) => sale.date.getDate() === day)
-          .reduce(
-            (sum, sale) => sum + Number(sale.total),
-            0
-          );
+    const dateKey =
+      `${now.getFullYear()}-` +
+      `${String(now.getMonth() + 1).padStart(2, "0")}-` +
+      `${String(day).padStart(2, "0")}`;
 
-        const dayExpenses = expenses
+    const tillhubDay = tillhubDaily.find(
+      (item) => item.date === dateKey
+    );
+    
+    const dayExpenses = expenses
           .filter((expense) => expense.date.getDate() === day)
           .reduce(
             (sum, expense) => sum + Number(expense.amount),
@@ -106,7 +163,7 @@ export async function GET() {
           label: `${day} ${now.toLocaleString("tr-TR", {
             month: "short",
           })}`,
-          revenue: daySales,
+          revenue: tillhubDay?.revenue ?? 0,
           expenses: dayExpenses,
         };
       }
@@ -120,19 +177,19 @@ export async function GET() {
         end: nextMonthStart,
       },
 
-      revenue,
-      expenses: expenseTotal,
-      netProfit: revenue - expenseTotal,
+      revenue: tillhubData.total,
+expenses: expenseTotal,
+netProfit: tillhubData.total - expenseTotal,
 
-      sales: {
-        cash,
-        card,
-        online,
-      },
+sales: {
+  cash: tillhubData.cashTotal,
+  card: tillhubData.cardTotal,
+  online: 0,
+},
 
       bankBalance,
-
       chart,
+      tillhub: tillhubData,
     });
   } catch (error) {
     console.error("GET /api/dashboard:", error);

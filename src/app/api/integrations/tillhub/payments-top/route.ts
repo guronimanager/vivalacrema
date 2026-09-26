@@ -39,21 +39,24 @@ async function getTillhubToken() {
 export async function GET(request: Request) {
   try {
     const { token, accountId } = await getTillhubToken();
-
     const { searchParams } = new URL(request.url);
 
-    const startParam =
-      searchParams.get("start") ?? "2026-09-01";
+    const startParam = searchParams.get("start");
+    const endParam = searchParams.get("end");
 
-    const endParam =
-      searchParams.get("end") ?? "2026-10-01";
+    const start = startParam
+      ? `${startParam}T00:00:00.000Z`
+      : "2026-09-01T00:00:00.000Z";
 
-    const start = `${startParam}T00:00:00.000Z`;
-    const end = `${endParam}T00:00:00.000Z`;
+    const end = endParam
+      ? `${endParam}T00:00:00.000Z`
+      : "2026-09-27T00:00:00.000Z";
+   
 
     const url =
-      `https://api.tillhub.com/api/v0/analytics/${accountId}/reports/transactions/simple` +
-      `?start=${encodeURIComponent(start)}` +
+      `https://api.tillhub.com/api/v0/analytics/${accountId}/reports/payments/top` +
+      `?branch_number=1` +
+      `&start=${encodeURIComponent(start)}` +
       `&end=${encodeURIComponent(end)}`;
 
     const response = await fetch(url, {
@@ -74,63 +77,50 @@ export async function GET(request: Request) {
           message:
             data?.msg ??
             data?.message ??
-            "TillHub transactions request failed",
+            "TillHub top payments request failed",
         },
         { status: response.status }
       );
     }
 
-    const report = data?.results?.[0];
-    const rows = Array.isArray(report?.results)
-      ? report.results
-      : [];
+   const report = data?.results?.[0];
+const values = Array.isArray(report?.values) ? report.values : [];
 
-    const dailyMap = new Map<string, number>();
+const cash = values.find(
+  (item: any) =>
+    item?.name === "Bar" ||
+    item?.payment_type === "cash"
+);
 
-    for (const row of rows) {
-      if (!row?.date) continue;
+const card = values.find(
+  (item: any) =>
+    item?.name === "Kartenzahlung" ||
+    item?.payment_type === "card"
+);
 
-      const date = new Date(row.date);
+const cashTotal = Number(cash?.sum ?? 0);
+const cardTotal = Number(card?.sum ?? 0);
 
-      const key = date.toISOString().slice(0, 10);
+const cashCount = Number(cash?.payment_count ?? 0);
+const cardCount = Number(card?.payment_count ?? 0);
 
-      const amount = Number(
-        row?.selling_price_total ?? 0
-      );
-
-      dailyMap.set(
-        key,
-        (dailyMap.get(key) ?? 0) + amount
-      );
-    }
-
-    const daily = Array.from(dailyMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, revenue]) => ({
-        date,
-        revenue: Number(revenue.toFixed(2)),
-      }));
-
-    const total = daily.reduce(
-      (sum, item) => sum + item.revenue,
-      0
-    );
-
-    return Response.json({
-      success: true,
-      status: response.status,
-      rowCount: report?.count ?? rows.length,
-      total: Number(total.toFixed(2)),
-      daily,
-      sample: rows.slice(0, 3),
-    });
+return Response.json({
+  success: true,
+  status: response.status,
+  cashTotal,
+  cardTotal,
+  total: Number((cashTotal + cardTotal).toFixed(2)),
+  cashCount,
+  cardCount,
+  paymentCount: cashCount + cardCount,
+});
   } catch (error) {
-    console.error("TillHub transactions error:", error);
+    console.error("TillHub top payments error:", error);
 
     return Response.json(
       {
         success: false,
-        message: "TillHub transaction verisi alınamadı.",
+        message: "TillHub top payments verisi alınamadı.",
       },
       { status: 500 }
     );
