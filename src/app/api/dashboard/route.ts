@@ -108,6 +108,18 @@ if (transactionsResponse.ok) {
       (sum, expense) => sum + Number(expense.amount),
       0
     );
+   
+     const expenseCategories = expenses.reduce(
+    (acc, expense) => {
+    const category = expense.category || "Diğer";
+    const amount = Number(expense.amount);
+
+    acc[category] = (acc[category] ?? 0) + amount;
+
+    return acc;
+  },
+  {} as Record<string, number>
+);
 
     const bankBalance = bankAccounts.reduce(
       (sum, account) => sum + Number(account.balance),
@@ -177,6 +189,7 @@ if (transactionsResponse.ok) {
 
       revenue: tillhubData.total,
 expenses: expenseTotal,
+
 netProfit: tillhubData.total - expenseTotal,
 
 sales: {
@@ -187,6 +200,7 @@ sales: {
 
       bankBalance,
       chart,
+      expenseCategories,
       tillhub: tillhubData,
     });
   } catch (error) {

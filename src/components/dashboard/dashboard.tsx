@@ -22,6 +22,7 @@ type DashboardData = {
     online: number;
   };
   bankBalance: number;
+  expenseCategories: Record<string, number>;
   chart: {
     day: number;
     label: string;
@@ -100,6 +101,15 @@ export function Dashboard() {
       subtitle: "Kayıtlı hesaplar",
     },
   ];
+  
+  const expenseRows = Object.entries(
+  data?.expenseCategories ?? {}
+)
+  .map(([label, value]) => ({
+    label,
+    value,
+  }))
+  .sort((a, b) => b.value - a.value);
 
   return (
     <div className="min-h-screen flex-1 bg-zinc-950 p-8 text-white">
@@ -270,6 +280,33 @@ export function Dashboard() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      
+  <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+  <p className="text-sm text-zinc-500">
+    Gider Dağılımı
+  </p>
+
+  <h3 className="mb-6 text-xl font-semibold">
+    Kategoriler
+  </h3>
+
+  <div className="space-y-4">
+    {expenseRows.length > 0 ? (
+      expenseRows.map((item, index) => (
+        <SummaryRow
+          key={item.label}
+          label={item.label}
+          value={item.value}
+          last={index === expenseRows.length - 1}
+        />
+      ))
+    ) : (
+      <p className="text-sm text-zinc-500">
+        Bu ay kayıtlı gider yok.
+      </p>
+    )}
+  </div>
+</div>
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <p className="text-sm text-zinc-500">
             Finans
