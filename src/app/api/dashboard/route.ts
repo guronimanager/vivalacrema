@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const now = new Date();
 
@@ -32,10 +32,8 @@ let tillhubData = {
 let tillhubDaily: { date: string; revenue: number }[] = [];
 
 try {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000";
-
+  const baseUrl = new URL(request.url).origin;
+  
   const tillhubResponse = await fetch(
     `${baseUrl}/api/integrations/tillhub/payments-top?start=${startDate}&end=${endDate}`,
     {
