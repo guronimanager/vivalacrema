@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { AccountType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
 
     const balance = Number(body?.balance ?? 0);
 
+    const type = String(
+      body?.type ?? "BANK"
+    ).trim() as AccountType;
+
     if (!name) {
       return Response.json(
         {
@@ -72,6 +77,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      type !== AccountType.BANK &&
+      type !== AccountType.CASH &&
+      type !== AccountType.SUMUP
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Geçerli bir hesap tipi seçin.",
+        },
+        { status: 400 }
+      );
+    }
+
     const account = await prisma.bankAccount.create({
       data: {
         businessId: business.id,
@@ -79,6 +98,7 @@ export async function POST(request: Request) {
         bankName: bankName || null,
         iban: iban || null,
         balance,
+        type,
       },
     });
 

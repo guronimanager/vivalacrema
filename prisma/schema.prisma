@@ -57,6 +57,12 @@ model Expense {
   @@index([businessId, date])
 }
 
+enum AccountType {
+  BANK
+  CASH
+  SUMUP
+}
+
 model BankAccount {
   id         String   @id @default(cuid())
   businessId String
@@ -64,6 +70,7 @@ model BankAccount {
   bankName   String?
   iban       String?
   balance    Decimal  @default(0) @db.Decimal(14, 2)
+  type       AccountType @default(BANK)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

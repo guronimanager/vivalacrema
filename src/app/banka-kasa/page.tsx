@@ -9,6 +9,7 @@ type BankAccount = {
   bankName: string | null;
   iban: string | null;
   balance: number;
+  type: "BANK" | "CASH" | "SUMUP";
 };
 
 type BankTransaction = {
@@ -42,6 +43,8 @@ export default function BankCashPage() {
   const [bankName, setBankName] = useState("");
   const [iban, setIban] = useState("");
   const [balance, setBalance] = useState("");
+  const [accountType, setAccountType] =
+    useState<"BANK" | "CASH" | "SUMUP">("BANK");
 
   // Hareket formu
   const [transactionAccountId, setTransactionAccountId] = useState("");
@@ -114,6 +117,7 @@ export default function BankCashPage() {
           bankName,
           iban,
           balance: Number(balance || 0),
+          type: accountType,
         }),
       });
 
@@ -128,6 +132,7 @@ export default function BankCashPage() {
       setBankName("");
       setIban("");
       setBalance("");
+      setAccountType("BANK");
       setAccountMessage("Banka hesabı başarıyla kaydedildi.");
 
       await loadAccounts();
@@ -242,6 +247,26 @@ export default function BankCashPage() {
             </h2>
 
             <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-zinc-400">
+                  Hesap Tipi
+                </label>
+
+                <select
+                  value={accountType}
+                  onChange={(e) =>
+                    setAccountType(
+                      e.target.value as "BANK" | "CASH" | "SUMUP"
+                    )
+                  }
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
+                >
+                  <option value="BANK">Banka</option>
+                  <option value="CASH">Kasa</option>
+                  <option value="SUMUP">SumUp</option>
+                </select>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm text-zinc-400">
                   Hesap Adı
@@ -463,6 +488,7 @@ export default function BankCashPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-zinc-800 text-zinc-500">
                 <tr>
+                  <th className="px-6 py-4">Tip</th>
                   <th className="px-6 py-4">Hesap</th>
                   <th className="px-6 py-4">Banka</th>
                   <th className="px-6 py-4">IBAN</th>
@@ -478,6 +504,14 @@ export default function BankCashPage() {
                     key={account.id}
                     className="border-b border-zinc-800 last:border-0"
                   >
+                    <td className="px-6 py-5 text-zinc-400">
+                      {account.type === "BANK"
+                        ? "Banka"
+                        : account.type === "CASH"
+                          ? "Kasa"
+                          : "SumUp"}
+                    </td>
+
                     <td className="px-6 py-5 font-medium">
                       {account.name}
                     </td>
@@ -499,7 +533,7 @@ export default function BankCashPage() {
                 {accounts.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-6 py-10 text-center text-zinc-500"
                     >
                       Henüz banka hesabı yok.
