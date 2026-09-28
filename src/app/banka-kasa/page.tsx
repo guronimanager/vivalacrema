@@ -57,9 +57,11 @@ export default function BankCashPage() {
 
   const [accountLoading, setAccountLoading] = useState(false);
   const [transactionLoading, setTransactionLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   const [accountMessage, setAccountMessage] = useState("");
   const [transactionMessage, setTransactionMessage] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
 
   async function loadAccounts() {
     const response = await fetch("/api/bank-accounts", {
@@ -187,6 +189,39 @@ export default function BankCashPage() {
     }
   }
 
+  async function syncSumUp() {
+    setSyncLoading(true);
+    setSyncMessage("");
+
+    try {
+      const response = await fetch(
+        "/api/integrations/sumup/sync",
+        {
+          method: "POST",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setSyncMessage(
+          result.message ?? "SumUp senkronizasyonu başarısız."
+        );
+        return;
+      }
+
+      setSyncMessage(
+        `SumUp: ${result.imported} yeni payout aktarıldı, ${result.skipped} kayıt zaten mevcuttu.`
+      );
+
+      await refreshAll();
+    } catch {
+      setSyncMessage("SumUp bağlantı hatası.");
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
   const totalBalance = accounts.reduce(
     (sum, account) => sum + account.balance,
     0
@@ -213,6 +248,37 @@ export default function BankCashPage() {
           <h1 className="mt-1 text-3xl font-semibold">
             Banka & Kasa
           </h1>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm text-zinc-500">
+                SumUp Entegrasyonu
+              </p>
+
+              <p className="mt-1 text-sm text-zinc-300">
+                Payout ve komisyon hareketlerini Banka & Kasa'ya aktar.
+              </p>
+
+              {syncMessage && (
+                <p className="mt-2 text-sm text-zinc-400">
+                  {syncMessage}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={syncSumUp}
+              disabled={syncLoading}
+              className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
+            >
+              {syncLoading
+                ? "Senkronize ediliyor..."
+                : "SumUp Senkronize Et"}
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
