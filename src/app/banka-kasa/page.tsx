@@ -222,17 +222,24 @@ export default function BankCashPage() {
     }
   }
 
-  const totalBalance = accounts.reduce(
-    (sum, account) => sum + account.balance,
-    0
-  );
+  const cashBalance = accounts
+    .filter((account) => account.type === "CASH")
+    .reduce((sum, account) => sum + account.balance, 0);
 
-  const totalIncome = transactions
-    .filter((transaction) => transaction.type === "INCOME")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const bankBalance = accounts
+    .filter((account) => account.type === "BANK")
+    .reduce((sum, account) => sum + account.balance, 0);
 
-  const totalExpense = transactions
-    .filter((transaction) => transaction.type === "EXPENSE")
+  const sumupBalance = accounts
+    .filter((account) => account.type === "SUMUP")
+    .reduce((sum, account) => sum + account.balance, 0);
+
+  const sumupFees = transactions
+    .filter(
+      (transaction) =>
+        transaction.type === "EXPENSE" &&
+        transaction.category === "SumUp Komisyonu"
+    )
     .reduce((sum, transaction) => sum + transaction.amount, 0);
 
   return (
@@ -283,23 +290,23 @@ export default function BankCashPage() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Toplam Bakiye"
-            value={money(totalBalance)}
+            title="Nakit Kasa"
+            value={money(cashBalance)}
           />
 
           <StatCard
-            title="Hesap Sayısı"
-            value={String(accounts.length)}
+            title="Banka Bakiyesi"
+            value={money(bankBalance)}
           />
 
           <StatCard
-            title="Toplam Giriş"
-            value={money(totalIncome)}
+            title="SumUp Bakiyesi"
+            value={money(sumupBalance)}
           />
 
           <StatCard
-            title="Toplam Çıkış"
-            value={money(totalExpense)}
+            title="SumUp Komisyonu"
+            value={money(sumupFees)}
           />
         </div>
 
