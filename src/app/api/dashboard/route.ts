@@ -376,6 +376,7 @@ export async function GET() {
       period: {
         start: monthStart,
         end: nextMonthStart,
+        label: now.toLocaleDateString("tr-TR", { month: "long", year: "numeric" }),
       },
 
       revenue: tillhubData.total,
@@ -403,7 +404,9 @@ export async function GET() {
       totalLiquidity,
 
       chart,
-      expenseCategories,
+      expenseCategories: Object.fromEntries(
+        Object.entries(expenseCategories).map(([category, amount]) => [category, round2(amount)])
+      ),
 
       tillhub: {
         cashTotal: tillhubData.cashTotal,

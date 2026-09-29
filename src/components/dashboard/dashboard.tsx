@@ -5,6 +5,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,6 +14,11 @@ import {
 
 type DashboardData = {
   success: boolean;
+  period: {
+    start: string;
+    end: string;
+    label: string;
+  };
   revenue: number;
   expenses: number;
   netProfit: number;
@@ -22,6 +28,13 @@ type DashboardData = {
     online: number;
   };
   bankBalance: number;
+  cashBalance: number;
+  sumupBalance: number;
+  totalLiquidity: number;
+  expenseBreakdown: {
+    manual: number;
+    sumupFees: number;
+  };
   expenseCategories: Record<string, number>;
   chart: {
     day: number;
@@ -32,20 +45,12 @@ type DashboardData = {
 };
 
 
-
-const expenses = [
-{ label: "Hammadde", value: "€0", width: "0%" },
-{ label: "Personel", value: "€0", width: "0%" },
-{ label: "Kira", value: "€0", width: "0%" },
-{ label: "Vergiler", value: "€0", width: "0%" },
-{ label: "Diğer", value: "€0", width: "0%" },
-];
-
 function money(value: number) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "EUR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -65,7 +70,10 @@ export function Dashboard() {
           throw new Error("Dashboard verileri alınamadı");
         }
 
-        const result = await response.json();
+        const result: DashboardData = await response.json();
+        if (!result.success) {
+          throw new Error("Dashboard verileri alınamadı");
+        }
 
         setData(result);
       } catch (err) {
@@ -79,16 +87,19 @@ export function Dashboard() {
     loadDashboard();
   }, []);
 
+  const periodLabel = data?.period.label ?? "Dönem bilgisi bekleniyor";
+  const salesTotal = (data?.sales.cash ?? 0) + (data?.sales.card ?? 0);
+
   const stats = [
     {
       title: "Aylık Ciro",
       value: loading ? "..." : money(data?.revenue ?? 0),
-      subtitle: "Bu ay",
+      subtitle: periodLabel,
     },
     {
       title: "Aylık Gider",
       value: loading ? "..." : money(data?.expenses ?? 0),
-      subtitle: "Bu ay",
+      subtitle: periodLabel,
     },
     {
       title: "Net Sonuç",
@@ -96,9 +107,9 @@ export function Dashboard() {
       subtitle: "Ciro - kayıtlı giderler",
     },
     {
-      title: "Banka Bakiyesi",
-      value: loading ? "..." : money(data?.bankBalance ?? 0),
-      subtitle: "Kayıtlı hesaplar",
+      title: "Toplam Likidite",
+      value: loading ? "..." : money(data?.totalLiquidity ?? 0),
+      subtitle: "Banka + kasa + SumUp",
     },
   ];
   
@@ -125,7 +136,7 @@ export function Dashboard() {
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300">
-          Eylül 2026
+          {loading ? "Yükleniyor..." : periodLabel}
         </div>
       </div>
 
@@ -135,6 +146,9 @@ export function Dashboard() {
         </div>
       )}
 
+      {loading && <p role="status" className="mb-6 text-sm text-zinc-400">Dashboard yükleniyor...</p>}
+
+      {data && <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <div
@@ -164,7 +178,7 @@ export function Dashboard() {
             </p>
 
             <h3 className="text-xl font-semibold">
-              Gelir / Gider
+              Günlük Gelir / Gider
             </h3>
           </div>
 
@@ -221,9 +235,12 @@ export function Dashboard() {
                   stroke="#71717a"
                 />
 
-                <YAxis stroke="#71717a" />
+                <YAxis stroke="#71717a" tickFormatter={(value: number) => money(value)} width={95} />
+
+                <Legend />
 
                 <Tooltip
+                  formatter={(value) => money(Number(value ?? 0))}
                   contentStyle={{
                     background: "#18181b",
                     border: "1px solid #3f3f46",
@@ -234,6 +251,7 @@ export function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="revenue"
+                  name="Gelir"
                   stroke="#ffffff"
                   fill="url(#gelir)"
                   strokeWidth={2}
@@ -242,6 +260,7 @@ export function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="expenses"
+                  name="Gider"
                   stroke="#71717a"
                   fill="url(#gider)"
                   strokeWidth={2}
@@ -253,7 +272,7 @@ export function Dashboard() {
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <p className="text-sm text-zinc-500">
-            Satış Dağılımı
+            TillHub Satış Dağılımı
           </p>
 
           <h3 className="mb-6 text-xl font-semibold">
@@ -264,22 +283,21 @@ export function Dashboard() {
             <PaymentRow
               label="Nakit"
               value={data?.sales.cash ?? 0}
+              total={salesTotal}
             />
 
             <PaymentRow
               label="Kart"
               value={data?.sales.card ?? 0}
+              total={salesTotal}
             />
 
-            <PaymentRow
-              label="Online"
-              value={data?.sales.online ?? 0}
-            />
+            {salesTotal === 0 && <p className="text-sm text-zinc-500">Bu dönemde TillHub satışı yok.</p>}
           </div>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
       
   <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
   <p className="text-sm text-zinc-500">
@@ -302,7 +320,7 @@ export function Dashboard() {
       ))
     ) : (
       <p className="text-sm text-zinc-500">
-        Bu ay kayıtlı gider yok.
+        Bu dönemde kayıtlı gider yok.
       </p>
     )}
   </div>
@@ -313,23 +331,23 @@ export function Dashboard() {
           </p>
 
           <h3 className="mb-6 text-xl font-semibold">
-            Satış Özeti
+            Gider Özeti
           </h3>
 
           <div className="space-y-4">
             <SummaryRow
-              label="Nakit Satış"
-              value={data?.sales.cash ?? 0}
+              label="Kayıtlı Giderler"
+              value={data?.expenseBreakdown.manual ?? 0}
             />
 
             <SummaryRow
-              label="Kart Satış"
-              value={data?.sales.card ?? 0}
+              label="SumUp Komisyonu"
+              value={data?.expenseBreakdown.sumupFees ?? 0}
             />
 
             <SummaryRow
-              label="Online Satış"
-              value={data?.sales.online ?? 0}
+              label="Toplam Gider"
+              value={data?.expenses ?? 0}
               last
             />
           </div>
@@ -341,28 +359,34 @@ export function Dashboard() {
           </p>
 
           <h3 className="mb-6 text-xl font-semibold">
-            Bu Ay
+            {periodLabel}
           </h3>
 
           <div className="space-y-4">
             <SummaryRow
-              label="Toplam Ciro"
-              value={data?.revenue ?? 0}
+              label="Banka Bakiyesi"
+              value={data?.bankBalance ?? 0}
             />
 
             <SummaryRow
-              label="Toplam Gider"
-              value={data?.expenses ?? 0}
+              label="Nakit Kasa"
+              value={data?.cashBalance ?? 0}
             />
 
             <SummaryRow
-              label="Net Sonuç"
-              value={data?.netProfit ?? 0}
+              label="SumUp Bakiyesi"
+              value={data?.sumupBalance ?? 0}
+            />
+
+            <SummaryRow
+              label="SumUp Komisyonu"
+              value={data?.expenseBreakdown?.sumupFees ?? 0}
               last
             />
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 }
@@ -370,17 +394,24 @@ export function Dashboard() {
 function PaymentRow({
   label,
   value,
+  total,
 }: {
   label: string;
   value: number;
+  total: number;
 }) {
+  const percentage = total > 0 ? Math.max(0, Math.min(100, value / total * 100)) : 0;
+
   return (
     <div>
       <div className="mb-2 flex justify-between text-sm">
         <span>{label}</span>
         <span className="text-zinc-400">
-          {money(value)}
+          {money(value)} · %{percentage.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
         </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-zinc-800" aria-hidden="true">
+        <div className="h-full rounded-full bg-zinc-300" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
