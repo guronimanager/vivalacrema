@@ -9,7 +9,7 @@ import {
   ReceiptText,
   PackageSearch,
   Users,
-  BadgeTurkishLira,
+  Euro,
   Truck,
   ChartNoAxesCombined,
 } from "lucide-react";
@@ -21,7 +21,7 @@ const items = [
   { label: "Giderler", href: "/giderler", icon: ReceiptText },
   { label: "Satın Alma", href: "/satin-alma", icon: PackageSearch },
   { label: "Personel", href: "/personel", icon: Users },
-  { label: "Vergiler", href: "/vergiler", icon: BadgeTurkishLira },
+  { label: "Vergiler", href: "/vergiler", icon: Euro },
   { label: "Tedarikçiler", href: "/tedarikciler", icon: Truck },
   { label: "Raporlar", href: "/raporlar", icon: ChartNoAxesCombined },
 ];
@@ -30,10 +30,15 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="min-h-screen w-64 border-r border-zinc-800 bg-zinc-950 p-5">
+    <aside className="min-h-screen w-16 shrink-0 border-r border-zinc-800 bg-zinc-950 p-2 md:w-64 md:p-5">
       <div className="mb-10">
-        <h1 className="text-xl font-bold text-white">Viva La Crema</h1>
-        <p className="mt-1 text-xs text-zinc-500">İşletme Yönetimi</p>
+        <p className="text-center font-bold md:hidden">VLC</p>
+        <h1 className="hidden text-xl font-bold text-white md:block">
+          Viva La Crema
+        </h1>
+        <p className="mt-1 hidden text-xs text-zinc-500 md:block">
+          İşletme Yönetimi
+        </p>
       </div>
 
       <nav className="space-y-2">
@@ -45,14 +50,17 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm transition ${
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
+              title={item.label}
+              className={`flex w-full items-center justify-center gap-3 rounded-xl px-2 py-3 md:justify-start md:px-4 text-sm transition ${
                 active
                   ? "bg-white text-black"
                   : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <Icon size={18} />
-              {item.label}
+              <span className="hidden md:inline">{item.label}</span>
             </Link>
           );
         })}

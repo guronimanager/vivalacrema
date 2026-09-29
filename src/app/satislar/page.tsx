@@ -1,7 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Sidebar } from "@/components/layout/sidebar";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  FinancePage,
+  Field,
+  Notice,
+  Stat,
+  inputClass,
+  buttonClass,
+  panelClass,
+} from "@/components/finance/ui";
+import {
+  money,
+  today,
+  dateLabel,
+  sumMoney,
+  revenueReconciliation,
+} from "@/lib/finance";
 
 type Sale = {
   id: string;
@@ -12,316 +27,290 @@ type Sale = {
   total: number;
   source: string | null;
 };
-
-function money(value: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value);
-}
+type TillhubSummary = {
+  success: boolean;
+  period: { label: string; start: string; end: string };
+  revenue: number;
+  sales: { cash: number; card: number };
+  chart: { day: number; label: string; revenue: number }[];
+};
 
 export default function SalesPage() {
+  const [summary, setSummary] = useState<TillhubSummary | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [manualError, setManualError] = useState("");
   const [cash, setCash] = useState("");
   const [card, setCard] = useState("");
   const [online, setOnline] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [date, setDate] = useState(today);
+  const [month, setMonth] = useState(() => today().slice(0, 7));
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function loadSales() {
-    const response = await fetch("/api/sales", {
-      cache: "no-store",
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      setSales(result.sales);
-    }
-  }
+  const load = useCallback(
+    () =>
+      Promise.all([
+        fetch("/api/dashboard", { cache: "no-store" })
+          .then(async (response) => {
+            const result: TillhubSummary = await response.json();
+            if (!response.ok || !result.success) throw new Error();
+            setError("");
+            setSummary(result);
+          })
+          .catch(() => {
+            setSummary(null);
+            setError("TillHub satışları yüklenemedi. Yeniden deneyin.");
+          }),
+        fetch("/api/sales", { cache: "no-store" })
+          .then(async (response) => {
+            const result: { success: boolean; sales: Sale[] } =
+              await response.json();
+            if (!response.ok || !result.success) throw new Error();
+            setManualError("");
+            setSales(
+              result.sales.filter(
+                (sale) => sale.source === "manual" || !sale.source,
+              ),
+            );
+          })
+          .catch(() => setManualError("Manuel satış kayıtları yüklenemedi.")),
+      ]).then(() => setDataLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    loadSales();
-  }, []);
+    void load();
+  }, [load]);
 
-  async function submitSale(e: React.FormEvent) {
-    e.preventDefault();
+  async function refresh() {
+    setDataLoading(true);
+    setError("");
+    await load();
+  }
 
-    setLoading(true);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (saving) return;
     setMessage("");
-
+    const amounts = [cash, card, online].map((value) => Number(value || 0));
+    if (
+      amounts.some((value) => !Number.isFinite(value) || value < 0) ||
+      sumMoney(amounts) <= 0
+    ) {
+      setMessage("En az bir pozitif satış tutarı girin.");
+      return;
+    }
+    setSaving(true);
     try {
       const response = await fetch("/api/sales", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cash: Number(cash || 0),
-          card: Number(card || 0),
-          online: Number(online || 0),
+          cash: amounts[0],
+          card: amounts[1],
+          online: amounts[2],
+          date,
           source: "manual",
         }),
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setMessage(result.message ?? "Satış eklenemedi.");
-        return;
-      }
-
+      const result: { success: boolean } = await response.json();
+      if (!response.ok || !result.success) throw new Error();
       setCash("");
       setCard("");
       setOnline("");
-      setMessage("Satış başarıyla kaydedildi.");
-
-      await loadSales();
+      setMessage("Manuel satış kaydedildi. TillHub cirosuna eklenmedi.");
+      await refresh();
     } catch {
-      setMessage("Sunucu bağlantı hatası.");
+      setMessage(
+        "Satış kaydedilemedi. Yeniden denemeden önce kayıt listesini kontrol edin.",
+      );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
-  const totalSales = sales.reduce(
-    (sum, sale) => sum + sale.total,
-    0
+  const visibleSales = sales.filter(
+    (sale) => !month || sale.date.slice(0, 7) === month,
   );
-
-  const totalCash = sales.reduce(
-    (sum, sale) => sum + sale.cash,
-    0
-  );
-
-  const totalCard = sales.reduce(
-    (sum, sale) => sum + sale.card,
-    0
-  );
-
-  const totalOnline = sales.reduce(
-    (sum, sale) => sum + sale.online,
-    0
-  );
+  const manualTotal = sumMoney(visibleSales.map((sale) => sale.total));
+  const reconciliation = summary
+    ? revenueReconciliation(summary.revenue, summary.chart)
+    : null;
+  const pending = dataLoading ? "Yükleniyor..." : "—";
 
   return (
-    <main className="flex min-h-screen bg-zinc-950 text-white">
-      <Sidebar />
-
-      <section className="flex-1 p-8">
-        <div className="mb-8">
-          <p className="text-sm text-zinc-500">
-            Gelir Yönetimi
-          </p>
-
-          <h1 className="mt-1 text-3xl font-semibold">
-            Satışlar
-          </h1>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Stat
-            title="Toplam Satış"
-            value={money(totalSales)}
-          />
-
-          <Stat
-            title="Nakit"
-            value={money(totalCash)}
-          />
-
-          <Stat
-            title="Kart"
-            value={money(totalCard)}
-          />
-
-          <Stat
-            title="Online"
-            value={money(totalOnline)}
-          />
-        </div>
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-3">
-          <form
-            onSubmit={submitSale}
-            className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
-          >
-            <h2 className="mb-6 text-xl font-semibold">
-              Günlük Satış Ekle
-            </h2>
-
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm text-zinc-400">
-                  Nakit
-                </label>
-
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={cash}
-                  onChange={(e) => setCash(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-zinc-400">
-                  Kart
-                </label>
-
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={card}
-                  onChange={(e) => setCard(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-zinc-400">
-                  Online
-                </label>
-
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={online}
-                  onChange={(e) => setOnline(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
-                />
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-                <p className="text-sm text-zinc-500">
-                  Toplam
-                </p>
-
-                <p className="mt-1 text-2xl font-semibold">
-                  {money(
-                    Number(cash || 0) +
-                      Number(card || 0) +
-                      Number(online || 0)
-                  )}
-                </p>
-              </div>
-
-              <button
-                disabled={loading}
-                className="w-full rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
-              >
-                {loading
-                  ? "Kaydediliyor..."
-                  : "Satış Kaydet"}
-              </button>
-
-              {message && (
-                <p className="text-sm text-zinc-400">
-                  {message}
-                </p>
-              )}
-            </div>
-          </form>
-
-          <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 xl:col-span-2">
-            <div className="border-b border-zinc-800 p-6">
-              <h2 className="text-xl font-semibold">
-                Satış Hareketleri
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-800 text-zinc-500">
-                  <tr>
-                    <th className="px-6 py-4">Tarih</th>
-                    <th className="px-6 py-4">Nakit</th>
-                    <th className="px-6 py-4">Kart</th>
-                    <th className="px-6 py-4">Online</th>
-                    <th className="px-6 py-4">Kaynak</th>
-                    <th className="px-6 py-4 text-right">
-                      Toplam
-                    </th>
+    <FinancePage
+      title="Satışlar"
+      description="Cironun ana kaynağı TillHub'dur. Manuel kayıtlar ayrı takip edilir; aynı satışın iki kez sayılmaması için TillHub toplamına eklenmez. SumUp tahsilatları satış geliri değildir."
+    >
+      <Notice error={error} />
+      {reconciliation && reconciliation.difference !== 0 && (
+        <p
+          role="status"
+          className="mb-6 rounded-xl border border-amber-900 p-4 text-sm text-amber-300"
+        >
+          TillHub rapor farkı: {money(reconciliation.difference)}. Aylık ciro
+          ödeme raporundan, günlük tutarlar işlem raporundan gelir. Günlük işlem
+          toplamı: {money(reconciliation.dailyTotal)}.
+        </p>
+      )}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">
+          TillHub · {summary?.period.label ?? "Dönem bekleniyor"}
+        </h2>
+        <button
+          className={buttonClass}
+          disabled={dataLoading}
+          onClick={() => void refresh()}
+        >
+          {dataLoading ? "Yükleniyor..." : "Yenile"}
+        </button>
+      </div>
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <Stat
+          label="TillHub Aylık Ciro"
+          value={summary && !dataLoading ? money(summary.revenue) : pending}
+        />
+        <Stat
+          label="TillHub Nakit Satış"
+          value={summary && !dataLoading ? money(summary.sales.cash) : pending}
+        />
+        <Stat
+          label="TillHub Kart Satış"
+          value={summary && !dataLoading ? money(summary.sales.card) : pending}
+        />
+      </div>
+      <div className={`${panelClass} mb-6`}>
+        <h2 className="mb-4 text-xl font-semibold">
+          TillHub Günlük İşlem Raporu
+        </h2>
+        <div className="max-h-80 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr>
+                <th className="py-3">Gün</th>
+                <th className="py-3 text-right">Ciro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!dataLoading &&
+                summary?.chart.map((day) => (
+                  <tr key={day.day} className="border-t border-zinc-800">
+                    <td className="py-3">{day.label}</td>
+                    <td className="py-3 text-right">{money(day.revenue)}</td>
                   </tr>
-                </thead>
-
-                <tbody>
-                  {sales.map((sale) => (
-                    <tr
-                      key={sale.id}
-                      className="border-b border-zinc-800 last:border-0"
-                    >
-                      <td className="px-6 py-5">
-                        {new Date(
-                          sale.date
-                        ).toLocaleDateString("tr-TR")}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {money(sale.cash)}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {money(sale.card)}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {money(sale.online)}
-                      </td>
-
-                      <td className="px-6 py-5 text-zinc-400">
-                        {sale.source ?? "-"}
-                      </td>
-
-                      <td className="px-6 py-5 text-right font-medium">
-                        {money(sale.total)}
-                      </td>
+                ))}
+            </tbody>
+          </table>
+          {!summary && (
+            <p className="py-4 text-zinc-500">
+              {dataLoading
+                ? "Satışlar yükleniyor..."
+                : "TillHub verisi gösterilemiyor."}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <form onSubmit={submit} className={panelClass}>
+          <h2 className="mb-5 text-xl font-semibold">Manuel Satış Ekle</h2>
+          <div className="space-y-4">
+            <Field label="Tarih">
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            {[
+              { label: "Nakit (EUR)", value: cash, setter: setCash },
+              { label: "Kart (EUR)", value: card, setter: setCard },
+              { label: "Online (EUR)", value: online, setter: setOnline },
+            ].map((field) => (
+              <Field key={field.label} label={field.label}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={field.value}
+                  onChange={(event) => field.setter(event.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            ))}
+            <p>
+              Toplam:{" "}
+              {money(
+                sumMoney([
+                  Number(cash || 0),
+                  Number(card || 0),
+                  Number(online || 0),
+                ]),
+              )}
+            </p>
+            <button className={buttonClass} disabled={saving}>
+              {saving ? "Kaydediliyor..." : "Manuel Satış Kaydet"}
+            </button>
+            <Notice message={message} />
+          </div>
+        </form>
+        <div className={`${panelClass} xl:col-span-2`}>
+          <h2 className="mb-4 text-xl font-semibold">Manuel Satış Kayıtları</h2>
+          <Notice error={manualError} />
+          <Field label="Manuel kayıt dönemi">
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <p className="my-4 text-zinc-400">
+            Filtrelenen manuel toplam:{" "}
+            {dataLoading || manualError ? "—" : money(manualTotal)}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  {["Tarih", "Nakit", "Kart", "Online", "Toplam"].map(
+                    (label) => (
+                      <th key={label} className="px-2 py-3">
+                        {label}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {!manualError &&
+                  visibleSales.map((sale) => (
+                    <tr key={sale.id} className="border-t border-zinc-800">
+                      <td className="px-2 py-3">{dateLabel(sale.date)}</td>
+                      <td className="px-2 py-3">{money(sale.cash)}</td>
+                      <td className="px-2 py-3">{money(sale.card)}</td>
+                      <td className="px-2 py-3">{money(sale.online)}</td>
+                      <td className="px-2 py-3">{money(sale.total)}</td>
                     </tr>
                   ))}
-
-                  {sales.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="px-6 py-10 text-center text-zinc-500"
-                      >
-                        Henüz satış kaydı yok.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
+            {!visibleSales.length && (
+              <p className="py-4 text-zinc-500">
+                {dataLoading
+                  ? "Kayıtlar yükleniyor..."
+                  : manualError
+                    ? "Kayıtlar gösterilemiyor."
+                    : "Bu dönemde manuel satış yok."}
+              </p>
+            )}
           </div>
         </div>
-      </section>
-    </main>
-  );
-}
-
-function Stat({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-      <p className="text-sm text-zinc-500">
-        {title}
-      </p>
-
-      <p className="mt-3 text-2xl font-semibold">
-        {value}
-      </p>
-    </div>
+      </div>
+    </FinancePage>
   );
 }

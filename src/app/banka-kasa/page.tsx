@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 
 type BankAccount = {
@@ -35,6 +35,11 @@ function today() {
 }
 
 export default function BankCashPage() {
+  const [dataLoading, setDataLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const [filterAccount, setFilterAccount] = useState("");
+
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
 
@@ -43,13 +48,15 @@ export default function BankCashPage() {
   const [bankName, setBankName] = useState("");
   const [iban, setIban] = useState("");
   const [balance, setBalance] = useState("");
-  const [accountType, setAccountType] =
-    useState<"BANK" | "CASH" | "SUMUP">("BANK");
+  const [accountType, setAccountType] = useState<"BANK" | "CASH" | "SUMUP">(
+    "BANK",
+  );
 
   // Hareket formu
   const [transactionAccountId, setTransactionAccountId] = useState("");
-  const [transactionType, setTransactionType] =
-    useState<"INCOME" | "EXPENSE">("INCOME");
+  const [transactionType, setTransactionType] = useState<"INCOME" | "EXPENSE">(
+    "INCOME",
+  );
   const [transactionDate, setTransactionDate] = useState(today());
   const [transactionCategory, setTransactionCategory] = useState("");
   const [transactionDescription, setTransactionDescription] = useState("");
@@ -63,44 +70,49 @@ export default function BankCashPage() {
   const [transactionMessage, setTransactionMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
 
-  async function loadAccounts() {
-    const response = await fetch("/api/bank-accounts", {
-      cache: "no-store",
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      setAccounts(result.accounts);
-
-      if (!transactionAccountId && result.accounts.length > 0) {
-        setTransactionAccountId(result.accounts[0].id);
-      }
-    }
-  }
-
-  async function loadTransactions() {
-    const response = await fetch("/api/bank-transactions", {
-      cache: "no-store",
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      setTransactions(result.transactions);
-    }
-  }
-
-  async function refreshAll() {
-    await Promise.all([
-      loadAccounts(),
-      loadTransactions(),
-    ]);
-  }
+  const refreshAll = useCallback(
+    () =>
+      Promise.all([
+        fetch("/api/bank-accounts", { cache: "no-store" }),
+        fetch("/api/bank-transactions", { cache: "no-store" }),
+      ])
+        .then(async ([accountsResponse, transactionsResponse]) => {
+          const accountResult: { success: boolean; accounts: BankAccount[] } =
+            await accountsResponse.json();
+          const transactionResult: {
+            success: boolean;
+            transactions: BankTransaction[];
+          } = await transactionsResponse.json();
+          if (
+            !accountsResponse.ok ||
+            !transactionsResponse.ok ||
+            !accountResult.success ||
+            !transactionResult.success
+          )
+            throw new Error();
+          setLoadError("");
+          setAccounts(accountResult.accounts);
+          setTransactions(transactionResult.transactions);
+          setTransactionAccountId(
+            (current) => current || accountResult.accounts[0]?.id || "",
+          );
+        })
+        .catch(() =>
+          setLoadError("Hesaplar ve hareketler yüklenemedi. Yeniden deneyin."),
+        )
+        .finally(() => setDataLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    refreshAll();
-  }, []);
+    void refreshAll();
+  }, [refreshAll]);
+
+  async function refresh() {
+    setDataLoading(true);
+    setLoadError("");
+    await refreshAll();
+  }
 
   async function submitAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -125,7 +137,7 @@ export default function BankCashPage() {
 
       const result = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || !result.success) {
         setAccountMessage(result.message ?? "Hesap eklenemedi.");
         return;
       }
@@ -135,9 +147,9 @@ export default function BankCashPage() {
       setIban("");
       setBalance("");
       setAccountType("BANK");
-      setAccountMessage("Banka hesabı başarıyla kaydedildi.");
+      setAccountMessage("Hesap başarıyla kaydedildi.");
 
-      await loadAccounts();
+      await refresh();
     } catch {
       setAccountMessage("Sunucu bağlantı hatası.");
     } finally {
@@ -169,10 +181,8 @@ export default function BankCashPage() {
 
       const result = await response.json();
 
-      if (!response.ok) {
-        setTransactionMessage(
-          result.message ?? "Banka hareketi eklenemedi."
-        );
+      if (!response.ok || !result.success) {
+        setTransactionMessage(result.message ?? "Banka hareketi eklenemedi.");
         return;
       }
 
@@ -181,7 +191,7 @@ export default function BankCashPage() {
       setTransactionAmount("");
       setTransactionMessage("Banka hareketi başarıyla kaydedildi.");
 
-      await refreshAll();
+      await refresh();
     } catch {
       setTransactionMessage("Sunucu bağlantı hatası.");
     } finally {
@@ -194,27 +204,22 @@ export default function BankCashPage() {
     setSyncMessage("");
 
     try {
-      const response = await fetch(
-        "/api/integrations/sumup/sync",
-        {
-          method: "POST",
-        }
-      );
+      const response = await fetch("/api/integrations/sumup/sync", {
+        method: "POST",
+      });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        setSyncMessage(
-          result.message ?? "SumUp senkronizasyonu başarısız."
-        );
+      if (!response.ok || !result.success) {
+        setSyncMessage(result.message ?? "SumUp senkronizasyonu başarısız.");
         return;
       }
 
       setSyncMessage(
-        `SumUp: ${result.imported} yeni payout aktarıldı, ${result.skipped} kayıt zaten mevcuttu.`
+        `SumUp: ${result.imported} yeni payout aktarıldı, ${result.skipped} kayıt zaten mevcuttu.`,
       );
 
-      await refreshAll();
+      await refresh();
     } catch {
       setSyncMessage("SumUp bağlantı hatası.");
     } finally {
@@ -234,11 +239,21 @@ export default function BankCashPage() {
     .filter((account) => account.type === "SUMUP")
     .reduce((sum, account) => sum + account.balance, 0);
 
-  const sumupFees = transactions
+  const periodTransactions = transactions.filter(
+    (transaction) => !month || transaction.date.slice(0, 7) === month,
+  );
+  const visibleTransactions = periodTransactions.filter(
+    (transaction) =>
+      !filterAccount || transaction.bankAccount?.id === filterAccount,
+  );
+  const totalLiquidity = bankBalance + cashBalance + sumupBalance;
+
+  const sumupFees = periodTransactions
     .filter(
       (transaction) =>
         transaction.type === "EXPENSE" &&
-        transaction.category === "SumUp Komisyonu"
+        transaction.source === "sumup" &&
+        transaction.category === "SumUp Komisyonu",
     )
     .reduce((sum, transaction) => sum + transaction.amount, 0);
 
@@ -246,67 +261,108 @@ export default function BankCashPage() {
     <main className="flex min-h-screen bg-zinc-950 text-white">
       <Sidebar />
 
-      <section className="flex-1 p-8">
+      <section className="min-w-0 flex-1 p-4 md:p-8">
         <div className="mb-8">
-          <p className="text-sm text-zinc-500">
-            Finans Yönetimi
-          </p>
+          <p className="text-sm text-zinc-500">Finans Yönetimi</p>
 
-          <h1 className="mt-1 text-3xl font-semibold">
-            Banka & Kasa
-          </h1>
+          <h1 className="mt-1 text-3xl font-semibold">Banka & Kasa</h1>
         </div>
+
+        {loadError && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-900 p-4 text-red-400"
+          >
+            {loadError}
+          </div>
+        )}
+        <div className="mb-6 flex flex-wrap items-end gap-4">
+          <label className="text-sm text-zinc-400">
+            Hareket dönemi
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="mt-2 block rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2"
+            />
+          </label>
+          <label className="text-sm text-zinc-400">
+            Hesap
+            <select
+              value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+              className="mt-2 block rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2"
+            >
+              <option value="">Tüm hesaplar</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={dataLoading}
+            className="rounded-xl border border-zinc-700 px-4 py-2 disabled:opacity-50"
+          >
+            {dataLoading ? "Yükleniyor..." : "Yenile"}
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-zinc-500">
+          Bakiyeler güncel hesap bakiyeleridir. Dönem filtresi hareketleri ve
+          SumUp komisyonunu etkiler; payout bir transferdir.
+        </p>
 
         <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm text-zinc-500">
-                SumUp Entegrasyonu
-              </p>
+              <p className="text-sm text-zinc-500">SumUp Entegrasyonu</p>
 
               <p className="mt-1 text-sm text-zinc-300">
-                Payout ve komisyon hareketlerini Banka & Kasa'ya aktar.
+                Payout ve komisyon hareketlerini Banka &amp; Kasa’ya aktar.
               </p>
 
               {syncMessage && (
-                <p className="mt-2 text-sm text-zinc-400">
-                  {syncMessage}
-                </p>
+                <p className="mt-2 text-sm text-zinc-400">{syncMessage}</p>
               )}
             </div>
 
             <button
               type="button"
               onClick={syncSumUp}
-              disabled={syncLoading}
+              disabled={syncLoading || dataLoading}
               className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
             >
-              {syncLoading
-                ? "Senkronize ediliyor..."
-                : "SumUp Senkronize Et"}
+              {syncLoading ? "Senkronize ediliyor..." : "SumUp Senkronize Et"}
             </button>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            title="Toplam Likidite"
+            value={dataLoading || loadError ? "—" : money(totalLiquidity)}
+          />
           <StatCard
             title="Nakit Kasa"
-            value={money(cashBalance)}
+            value={dataLoading || loadError ? "—" : money(cashBalance)}
           />
 
           <StatCard
             title="Banka Bakiyesi"
-            value={money(bankBalance)}
+            value={dataLoading || loadError ? "—" : money(bankBalance)}
           />
 
           <StatCard
             title="SumUp Bakiyesi"
-            value={money(sumupBalance)}
+            value={dataLoading || loadError ? "—" : money(sumupBalance)}
           />
 
           <StatCard
-            title="SumUp Komisyonu"
-            value={money(sumupFees)}
+            title="Dönem SumUp Komisyonu"
+            value={dataLoading || loadError ? "—" : money(sumupFees)}
           />
         </div>
 
@@ -315,22 +371,22 @@ export default function BankCashPage() {
             onSubmit={submitAccount}
             className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
           >
-            <h2 className="mb-6 text-xl font-semibold">
-              Yeni Hesap
-            </h2>
+            <h2 className="mb-6 text-xl font-semibold">Yeni Hesap</h2>
 
             <div className="grid gap-5 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-zinc-400">
+                <label
+                  htmlFor="banka-kasa-field-1"
+                  className="mb-2 block text-sm text-zinc-400"
+                >
                   Hesap Tipi
                 </label>
 
                 <select
+                  id="banka-kasa-field-1"
                   value={accountType}
                   onChange={(e) =>
-                    setAccountType(
-                      e.target.value as "BANK" | "CASH" | "SUMUP"
-                    )
+                    setAccountType(e.target.value as "BANK" | "CASH" | "SUMUP")
                   }
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
                 >
@@ -341,11 +397,15 @@ export default function BankCashPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-400">
+                <label
+                  htmlFor="banka-kasa-field-2"
+                  className="mb-2 block text-sm text-zinc-400"
+                >
                   Hesap Adı
                 </label>
 
                 <input
+                  id="banka-kasa-field-2"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Örn: Ana Hesap"
@@ -355,11 +415,15 @@ export default function BankCashPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-400">
+                <label
+                  htmlFor="banka-kasa-field-3"
+                  className="mb-2 block text-sm text-zinc-400"
+                >
                   Banka Adı
                 </label>
 
                 <input
+                  id="banka-kasa-field-3"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="Örn: Sparkasse"
@@ -368,11 +432,15 @@ export default function BankCashPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-400">
+                <label
+                  htmlFor="banka-kasa-field-4"
+                  className="mb-2 block text-sm text-zinc-400"
+                >
                   IBAN
                 </label>
 
                 <input
+                  id="banka-kasa-field-4"
                   value={iban}
                   onChange={(e) => setIban(e.target.value)}
                   placeholder="DE..."
@@ -381,11 +449,15 @@ export default function BankCashPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-zinc-400">
+                <label
+                  htmlFor="banka-kasa-field-5"
+                  className="mb-2 block text-sm text-zinc-400"
+                >
                   Başlangıç Bakiyesi
                 </label>
 
                 <input
+                  id="banka-kasa-field-5"
                   type="number"
                   step="0.01"
                   value={balance}
@@ -397,16 +469,14 @@ export default function BankCashPage() {
             </div>
 
             <button
-              disabled={accountLoading}
+              disabled={accountLoading || dataLoading}
               className="mt-6 w-full rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
             >
               {accountLoading ? "Kaydediliyor..." : "Hesap Kaydet"}
             </button>
 
             {accountMessage && (
-              <p className="mt-4 text-sm text-zinc-400">
-                {accountMessage}
-              </p>
+              <p className="mt-4 text-sm text-zinc-400">{accountMessage}</p>
             )}
           </form>
 
@@ -414,27 +484,28 @@ export default function BankCashPage() {
             onSubmit={submitTransaction}
             className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
           >
-            <h2 className="mb-6 text-xl font-semibold">
-              Yeni Para Hareketi
-            </h2>
+            <h2 className="mb-6 text-xl font-semibold">Yeni Para Hareketi</h2>
 
             {accounts.length === 0 ? (
               <p className="text-sm text-zinc-500">
-                Para hareketi eklemek için önce bir banka veya kasa hesabı oluştur.
+                Para hareketi eklemek için önce bir banka veya kasa hesabı
+                oluştur.
               </p>
             ) : (
               <>
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-6"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       Hesap
                     </label>
 
                     <select
+                      id="banka-kasa-field-6"
                       value={transactionAccountId}
-                      onChange={(e) =>
-                        setTransactionAccountId(e.target.value)
-                      }
+                      onChange={(e) => setTransactionAccountId(e.target.value)}
                       required
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
                     >
@@ -447,15 +518,19 @@ export default function BankCashPage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-7"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       İşlem Tipi
                     </label>
 
                     <select
+                      id="banka-kasa-field-7"
                       value={transactionType}
                       onChange={(e) =>
                         setTransactionType(
-                          e.target.value as "INCOME" | "EXPENSE"
+                          e.target.value as "INCOME" | "EXPENSE",
                         )
                       }
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
@@ -466,34 +541,38 @@ export default function BankCashPage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-8"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       Tarih
                     </label>
 
                     <input
+                      id="banka-kasa-field-8"
                       type="date"
                       value={transactionDate}
-                      onChange={(e) =>
-                        setTransactionDate(e.target.value)
-                      }
+                      onChange={(e) => setTransactionDate(e.target.value)}
                       required
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-9"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       Tutar
                     </label>
 
                     <input
+                      id="banka-kasa-field-9"
                       type="number"
                       step="0.01"
                       min="0.01"
                       value={transactionAmount}
-                      onChange={(e) =>
-                        setTransactionAmount(e.target.value)
-                      }
+                      onChange={(e) => setTransactionAmount(e.target.value)}
                       placeholder="0.00"
                       required
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
@@ -501,26 +580,32 @@ export default function BankCashPage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-10"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       Kategori
                     </label>
 
                     <input
+                      id="banka-kasa-field-10"
                       value={transactionCategory}
-                      onChange={(e) =>
-                        setTransactionCategory(e.target.value)
-                      }
+                      onChange={(e) => setTransactionCategory(e.target.value)}
                       placeholder="Örn: Sermaye, Fatura, Tedarikçi"
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm text-zinc-400">
+                    <label
+                      htmlFor="banka-kasa-field-11"
+                      className="mb-2 block text-sm text-zinc-400"
+                    >
                       Açıklama
                     </label>
 
                     <input
+                      id="banka-kasa-field-11"
                       value={transactionDescription}
                       onChange={(e) =>
                         setTransactionDescription(e.target.value)
@@ -532,12 +617,10 @@ export default function BankCashPage() {
                 </div>
 
                 <button
-                  disabled={transactionLoading}
+                  disabled={transactionLoading || dataLoading || !!loadError}
                   className="mt-6 w-full rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
                 >
-                  {transactionLoading
-                    ? "Kaydediliyor..."
-                    : "Hareket Kaydet"}
+                  {transactionLoading ? "Kaydediliyor..." : "Hareket Kaydet"}
                 </button>
 
                 {transactionMessage && (
@@ -552,9 +635,7 @@ export default function BankCashPage() {
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 p-6">
-            <h2 className="text-xl font-semibold">
-              Banka Hesapları
-            </h2>
+            <h2 className="text-xl font-semibold">Hesaplar</h2>
           </div>
 
           <div className="overflow-x-auto">
@@ -565,9 +646,7 @@ export default function BankCashPage() {
                   <th className="px-6 py-4">Hesap</th>
                   <th className="px-6 py-4">Banka</th>
                   <th className="px-6 py-4">IBAN</th>
-                  <th className="px-6 py-4 text-right">
-                    Bakiye
-                  </th>
+                  <th className="px-6 py-4 text-right">Bakiye</th>
                 </tr>
               </thead>
 
@@ -585,9 +664,7 @@ export default function BankCashPage() {
                           : "SumUp"}
                     </td>
 
-                    <td className="px-6 py-5 font-medium">
-                      {account.name}
-                    </td>
+                    <td className="px-6 py-5 font-medium">{account.name}</td>
 
                     <td className="px-6 py-5 text-zinc-400">
                       {account.bankName ?? "-"}
@@ -609,7 +686,11 @@ export default function BankCashPage() {
                       colSpan={5}
                       className="px-6 py-10 text-center text-zinc-500"
                     >
-                      Henüz banka hesabı yok.
+                      {dataLoading
+                        ? "Hesaplar yükleniyor..."
+                        : loadError
+                          ? "Hesaplar gösterilemiyor."
+                          : "Henüz hesap yok."}
                     </td>
                   </tr>
                 )}
@@ -620,9 +701,7 @@ export default function BankCashPage() {
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 p-6">
-            <h2 className="text-xl font-semibold">
-              Son Hareketler
-            </h2>
+            <h2 className="text-xl font-semibold">Son Hareketler</h2>
           </div>
 
           <div className="overflow-x-auto">
@@ -639,15 +718,13 @@ export default function BankCashPage() {
               </thead>
 
               <tbody>
-                {transactions.map((transaction) => (
+                {visibleTransactions.map((transaction) => (
                   <tr
                     key={transaction.id}
                     className="border-b border-zinc-800 last:border-0"
                   >
                     <td className="px-6 py-5">
-                      {new Date(
-                        transaction.date
-                      ).toLocaleDateString("tr-TR")}
+                      {new Date(transaction.date).toLocaleDateString("tr-TR")}
                     </td>
 
                     <td className="px-6 py-5">
@@ -689,19 +766,27 @@ export default function BankCashPage() {
                             : ""
                       }`}
                     >
-                      {transaction.type === "EXPENSE" ? "-" : "+"}
+                      {transaction.type === "EXPENSE"
+                        ? "-"
+                        : transaction.type === "INCOME"
+                          ? "+"
+                          : ""}
                       {money(transaction.amount)}
                     </td>
                   </tr>
                 ))}
 
-                {transactions.length === 0 && (
+                {visibleTransactions.length === 0 && (
                   <tr>
                     <td
                       colSpan={6}
                       className="px-6 py-10 text-center text-zinc-500"
                     >
-                      Henüz banka hareketi yok.
+                      {dataLoading
+                        ? "Hareketler yükleniyor..."
+                        : loadError
+                          ? "Hareketler gösterilemiyor."
+                          : "Seçili filtrelerde hareket yok."}
                     </td>
                   </tr>
                 )}
@@ -714,22 +799,12 @@ export default function BankCashPage() {
   );
 }
 
-function StatCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
+function StatCard({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-      <p className="text-sm text-zinc-500">
-        {title}
-      </p>
+      <p className="text-sm text-zinc-500">{title}</p>
 
-      <p className="mt-3 text-3xl font-semibold">
-        {value}
-      </p>
+      <p className="mt-3 text-3xl font-semibold">{value}</p>
     </div>
   );
 }
