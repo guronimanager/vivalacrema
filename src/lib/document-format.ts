@@ -12,7 +12,7 @@ export const defaultArchiveFolders: Record<keyof typeof documentKinds, ArchiveFo
   INVOICE_SERVICE: "02_Online_Rechnungen", INVOICE_MATERIAL: "02_Online_Rechnungen", BANK_STATEMENT: "01_Bankkontoauszug", EMPLOYEE: "06_Briefe", ACCOUNTING: "07_Berichte_und_Zusammenfassungen", TAX: "06_Briefe",
 };
 export type DocumentKind = keyof typeof documentKinds;
-export interface DocumentMetadata { kind: DocumentKind; entity: string; date: string; originalName: string; archiveFolder?: ArchiveFolder }
+export interface DocumentMetadata { kind: DocumentKind; entity: string; date: string; originalName: string; archiveFolder?: ArchiveFolder; employeeId?: string }
 export interface ArchiveDocument extends DocumentMetadata {
   id: string; pathname: string; contentType: string; size: number; createdAt: string;
   accountId: string; oneDrivePath: string; syncStatus: "PENDING" | "SYNCED" | "FAILED";
@@ -32,7 +32,8 @@ export function validateMetadata(value: unknown): DocumentMetadata {
   const input = value as Record<string, unknown>;
   if (typeof input.kind !== "string" || !Object.hasOwn(documentKinds, input.kind) || typeof input.entity !== "string" || !input.entity.trim() || input.entity.length > 120 || typeof input.date !== "string" || !validDate(input.date) || typeof input.originalName !== "string" || !input.originalName.trim() || input.originalName.length > 255) throw new Error("Belge türü, ilgili kişi/kurum, tarih ve dosya adı geçerli olmalıdır.");
   if (input.archiveFolder !== undefined && !archiveFolders.includes(input.archiveFolder as ArchiveFolder)) throw new Error("Arşiv alt klasörü geçersiz.");
-  return { ...(input.archiveFolder ? { archiveFolder: input.archiveFolder as ArchiveFolder } : {}), kind: input.kind as DocumentKind, entity: input.entity.trim(), date: input.date, originalName: input.originalName };
+  if (input.employeeId !== undefined && (input.kind !== "EMPLOYEE" || typeof input.employeeId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(input.employeeId))) throw new Error("Personel bağlantısı geçersiz.");
+  return { ...(input.employeeId ? { employeeId: input.employeeId as string } : {}), ...(input.archiveFolder ? { archiveFolder: input.archiveFolder as ArchiveFolder } : {}), kind: input.kind as DocumentKind, entity: input.entity.trim(), date: input.date, originalName: input.originalName };
 }
 export function oneDrivePath(metadata: DocumentMetadata, hash: string) {
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("Belge kimliği geçersiz.");

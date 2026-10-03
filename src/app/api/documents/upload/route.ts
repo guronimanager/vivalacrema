@@ -1,3 +1,4 @@
+import { employeeMetadata } from "@/lib/personnel/documents";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { finalizeDocument, validatePathname } from "@/lib/onedrive/documents";
 import {
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
         validatePathname(pathname);
         let metadata;
         try {
-          metadata = validateMetadata(JSON.parse(clientPayload || "null"));
+          metadata = await employeeMetadata(JSON.parse(clientPayload || "null"));
         } catch {
           throw new ArchiveError("Belge bilgileri geçersiz.");
         }

@@ -1,16 +1,18 @@
+import { assertOrigin, requireSession } from "@/lib/onedrive/security";
+import { invoiceFailure } from "@/lib/invoices/errors";
 import { prisma } from "@/lib/prisma";
 import {
   readInput,
   text,
   amount,
   flag,
-  inputFailure,
 } from "@/lib/record-input";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requireSession();
     const business = await prisma.business.findFirst();
     const employees = business
       ? await prisma.employee.findMany({
@@ -24,14 +26,16 @@ export async function GET() {
         ...employee,
         salary: Number(employee.salary.toFixed(2)),
       })),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return inputFailure(error);
+    return invoiceFailure(error);
   }
 }
 
 async function save(request: Request, update: boolean) {
   try {
+    assertOrigin(request);
+    await requireSession();
     const body = await readInput(request);
     const data = {
       name: text(body, "name", true),
@@ -72,7 +76,7 @@ async function save(request: Request, update: boolean) {
       { status: 201 },
     );
   } catch (error) {
-    return inputFailure(error);
+    return invoiceFailure(error);
   }
 }
 

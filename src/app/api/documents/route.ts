@@ -1,6 +1,7 @@
 import { type DocumentMetadata } from "@/lib/document-format";
 import {
   finalizeDocument,
+  assignLegacyEmployeeDocument,
   listDocuments,
   publicDocument,
   syncDocument,
@@ -51,4 +52,15 @@ export async function POST(request: Request) {
   } catch (error) {
     return failure(error);
   }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    assertOrigin(request);
+    const current = await requireSession();
+    const body = await request.json();
+    if (typeof body?.id !== "string" || typeof body?.employeeId !== "string") return Response.json({ success: false, message: "Belge ve personel seçin." }, { status: 400 });
+    const document = await assignLegacyEmployeeDocument(body.id, body.employeeId, current.accountId);
+    return Response.json({ success: true, document: publicDocument(document) }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return failure(error); }
 }

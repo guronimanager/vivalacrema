@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { assertOrigin, requireSession } from "@/lib/onedrive/security";
-import { InputError, readInput, text } from "@/lib/record-input";
+import { InputError, readInput, text, flag } from "@/lib/record-input";
 import { invoiceFailure } from "@/lib/invoices/errors";
 export const dynamic = "force-dynamic";
 export async function GET() {
@@ -46,7 +46,10 @@ async function save(request: Request, update: boolean) {
       }))
     )
       throw new InputError("Personel bulunamadı.");
-    const data = { name, email, role, employeeId, accessState: "PLANNED" };
+    const enabled = flag(body, "documentAccess", false);
+    if (enabled && (role !== "STAFF" || !employeeId)) throw new InputError("Evrak erişimi için Personel rolünü ve personel kaydını seçin.");
+    if (enabled && !(await prisma.employee.findFirst({ where: { id: employeeId!, businessId: business.id, active: true } }))) throw new InputError("Pasif personele evrak erişimi verilemez.");
+    const data = { name, email, role, employeeId, accessState: enabled ? "ACTIVE" : "PLANNED" };
     if (update) {
       const id = text(body, "id", true);
       if (

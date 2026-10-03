@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   FinancePage,
@@ -37,12 +38,14 @@ export function RecordManager({
   endpoint,
   fields,
   summaries = [],
+  employeeDocuments = false,
 }: {
   title: string;
   description: string;
   endpoint: string;
   fields: RecordField[];
   summaries?: Summary[];
+  employeeDocuments?: boolean;
 }) {
   const initial = useCallback(
     () =>
@@ -157,6 +160,7 @@ export function RecordManager({
 
   return (
     <FinancePage title={title} description={description}>
+      {employeeDocuments && <p className="mb-5 text-sm text-zinc-400">Personel evraklarını yönetmek için <Link className="underline" href="/evraklar">Evrak Arşivi’nden Microsoft hesabınızla giriş yapın</Link>. Personelin kendi evraklarına giriş yetkisi Kullanıcılar sayfasında açılır.</p>}
       <Notice error={error} />
       {summaries.length > 0 && (
         <div className="mb-6 grid gap-4 md:grid-cols-3">
@@ -296,6 +300,7 @@ export function RecordManager({
                         >
                           Düzenle
                         </button>
+                        {employeeDocuments && <Link className="ml-4 underline" href={`/evraklar?employeeId=${encodeURIComponent(record.id)}`}>Evrakları / Yükle</Link>}
                       </td>
                     </tr>
                   ))}

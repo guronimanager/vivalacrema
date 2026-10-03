@@ -14,6 +14,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  accessState: string;
   employeeId: string | null;
   employee: { name: string } | null;
 }
@@ -23,6 +24,7 @@ const blank = () => ({
   email: "",
   role: "STAFF",
   employeeId: "",
+  documentAccess: false,
 });
 export function UsersWorkspace() {
   const [records, setRecords] = useState<User[]>([]),
@@ -60,7 +62,7 @@ export function UsersWorkspace() {
       await clientApi("/api/users", draft, draft.id ? "PATCH" : "POST");
       setDraft(blank());
       setVersion((v) => v + 1);
-      setMessage("Kullanıcı profili planlandı. Giriş yetkisi verilmedi.");
+      setMessage(draft.documentAccess ? "Personelin yalnızca kendi evraklarına giriş yetkisi açıldı." : "Profil kaydedildi. Personel evrak erişimi kapalı.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -70,7 +72,7 @@ export function UsersWorkspace() {
   return (
     <FinancePage
       title="Kullanıcılar"
-      description="Personel hesaplarını hazırlayın; giriş yetkileri daha sonra etkinleştirilecek."
+      description="Personeli Microsoft hesabına bağlayın ve kendi evraklarına erişimini yönetin."
     >
       <p className="mb-5 text-sm text-zinc-400">
         Mevcut oturum: {currentEmail || "Microsoft bağlantısı gerekli"}. Satın
@@ -111,7 +113,7 @@ export function UsersWorkspace() {
             <select
               className={inputClass}
               value={draft.role}
-              onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, role: e.target.value, documentAccess: false })}
             >
               <option value="STAFF">Personel</option>
               <option value="ADMIN">Yönetici</option>
@@ -122,7 +124,7 @@ export function UsersWorkspace() {
               className={inputClass}
               value={draft.employeeId}
               onChange={(e) =>
-                setDraft({ ...draft, employeeId: e.target.value })
+                setDraft({ ...draft, employeeId: e.target.value, documentAccess: false })
               }
             >
               <option value="">Bağlantı yok</option>
@@ -133,7 +135,11 @@ export function UsersWorkspace() {
               ))}
             </select>
           </Field>
+          <Field label="Kendi evraklarına giriş yetkisi">
+            <input type="checkbox" checked={draft.documentAccess} disabled={draft.role !== "STAFF" || !draft.employeeId} onChange={e => setDraft({ ...draft, documentAccess: e.target.checked })} />
+          </Field>
         </fieldset>
+        <p className="mt-4 text-sm text-zinc-400">Personelin kişisel Microsoft hesabındaki e-posta adresini girin. Erişim açıldığında /evraklarim üzerinden yalnızca kendisine bağlı belgeleri indirir. Yönetici rolü henüz ek giriş yetkisi vermez.</p>
         <button className={`${buttonClass} mt-4`} disabled={busy}>
           Profili kaydet
         </button>
@@ -146,7 +152,8 @@ export function UsersWorkspace() {
         </button>
       </form>
       <section className={`${panelClass} mt-6`}>
-        <h2 className="mb-4 text-xl">Planlanan kullanıcılar</h2>
+        <h2 className="mb-4 text-xl">Kullanıcılar</h2>
+        <a className="mb-4 inline-block underline" href="/evraklarim">Personel evrak giriş sayfası</a>
         {records.map((u) => (
           <div
             key={u.id}
@@ -156,8 +163,7 @@ export function UsersWorkspace() {
               {u.name} · {u.email}
               <p className="text-sm text-zinc-400">
                 {u.role === "ADMIN" ? "Yönetici" : "Personel"} ·{" "}
-                {u.employee?.name || "Personel bağlantısı yok"} · Giriş henüz
-                etkin değil
+                {u.employee?.name || "Personel bağlantısı yok"} · {u.accessState === "ACTIVE" ? "Kendi evraklarına erişim açık" : "Giriş etkin değil"}
               </p>
             </div>
             <button
@@ -169,6 +175,7 @@ export function UsersWorkspace() {
                   email: u.email,
                   role: u.role,
                   employeeId: u.employeeId || "",
+                  documentAccess: u.accessState === "ACTIVE",
                 })
               }
             >

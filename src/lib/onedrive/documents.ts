@@ -1,6 +1,7 @@
+import { employeeMetadata, sameDocumentAssignment } from "@/lib/personnel/documents";
 import { createHash } from "node:crypto";
 import { BlobPreconditionFailedError, get, head, list, put } from "@vercel/blob";
-import { type ArchiveDocument, type DocumentMetadata, contentTypes, maximumFileSize, oneDrivePath, validateMetadata } from "@/lib/document-format";
+import { type ArchiveDocument, type DocumentMetadata, contentTypes, maximumFileSize, oneDrivePath } from "@/lib/document-format";
 import { accessToken } from "./connection";
 import { resolveArchiveFolder } from "./folder";
 import { ArchiveError } from "./security";
@@ -22,7 +23,7 @@ async function writeDocument(document: ArchiveDocument, etag?: string) {
 }
 export async function finalizeDocument(pathname: string, metadata: DocumentMetadata, accountId: string) {
   validatePathname(pathname);
-  try { validateMetadata(metadata); } catch { throw new ArchiveError("Belge bilgileri geçersiz."); }
+  metadata = await employeeMetadata(metadata);
   const file = await head(pathname);
   if (file.size < 1 || file.size > maximumFileSize || !contentTypes.includes(file.contentType)) throw new ArchiveError("Dosya türü desteklenmiyor veya boyutu 20 MB sınırını aşıyor.");
   const blob = await get(pathname, { access: "private", useCache: false });
@@ -38,13 +39,14 @@ export async function finalizeDocument(pathname: string, metadata: DocumentMetad
     hash.update(value);
   }
   const id = hash.digest("hex");
-  try { return (await readDocument(id, accountId)).document; }
+  try { return sameDocumentAssignment((await readDocument(id, accountId)).document, metadata); }
   catch (error) { if (!(error instanceof ArchiveError) || error.status !== 404) throw error; }
   const document: ArchiveDocument = { ...metadata, id, pathname, accountId, contentType: file.contentType, size: file.size, createdAt: new Date().toISOString(), oneDrivePath: oneDrivePath(metadata, id), syncStatus: "PENDING" };
   try { await writeDocument(document); }
   catch (error) {
     // Concurrent completion callbacks must converge on the same content hash.
-    try { return (await readDocument(id, accountId)).document; } catch { throw error; }
+    const existing = await readDocument(id, accountId).catch(() => { throw error; });
+    return sameDocumentAssignment(existing.document, metadata);
   }
   return document;
 }
@@ -116,7 +118,8 @@ export async function updatePendingDocument(id: string, metadata: DocumentMetada
   const { document, etag } = await readDocument(id, accountId);
   // Previously synced originals stay where the user archived them.
   if (document.syncStatus === "SYNCED") return document;
-  const valid = validateMetadata(metadata);
+  const valid = await employeeMetadata(metadata);
+  sameDocumentAssignment(document, valid);
   const updated = { ...document, ...valid, oneDrivePath: oneDrivePath(valid, id), syncStatus: "PENDING" as const, syncMessage: undefined };
   await writeDocument(updated, etag);
   return updated;
@@ -125,4 +128,14 @@ export function publicDocument(document: ArchiveDocument) {
   const { accountId: _accountId, pathname: _pathname, ...visible } = document;
   void _accountId; void _pathname;
   return visible;
+}
+
+export async function assignLegacyEmployeeDocument(id: string, employeeId: string, accountId: string) {
+  const { document, etag } = await readDocument(id, accountId);
+  if (document.kind !== "EMPLOYEE" || document.employeeId) throw new ArchiveError("Yalnızca personel bağlantısı olmayan eski personel evrakları bağlanabilir.", 409);
+  const metadata = await employeeMetadata({ ...document, employeeId });
+  // Keep the original OneDrive location and file; only grant explicit employee ownership.
+  const updated = { ...document, ...metadata };
+  await writeDocument(updated, etag);
+  return updated;
 }

@@ -34,6 +34,7 @@ export default function EmployeesPage() {
       title="Personel"
       description="Personel, görev ve aylık maaş planını yönetin. Maaş planı otomatik gider veya banka hareketi oluşturmaz; gerçek ödemeleri Giderler'de bir kez kaydedin."
       endpoint="/api/employees"
+      employeeDocuments
       fields={fields}
       summaries={summaries}
     />
