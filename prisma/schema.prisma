@@ -13,6 +13,13 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  products Product[]
+  productCounters ProductCounter[]
+  purchaseRequests PurchaseRequest[]
+  portalUsers PortalUser[]
+  supplierDocuments SupplierDocument[]
+  catalogImports CatalogImportLine[]
+  invoices     PurchaseInvoice[]
   sales        Sale[]
   expenses     Expense[]
   bankAccounts BankAccount[]
@@ -52,6 +59,7 @@ model Expense {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  invoice PurchaseInvoice?
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, date])
@@ -92,6 +100,7 @@ model Transaction {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  invoicePayment InvoicePayment?
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
 
@@ -109,10 +118,16 @@ model Supplier {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  products SupplierProduct[]
+  purchaseRequests PurchaseRequest[]
+  documents SupplierDocument[]
+  catalogImports CatalogImportLine[]
+  invoices PurchaseInvoice[]
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model Employee {
+  portalUser PortalUser?
   id         String   @id @default(cuid())
   businessId String
   name       String
@@ -143,4 +158,168 @@ enum TransactionType {
   INCOME
   EXPENSE
   TRANSFER
+}
+
+model PurchaseInvoice {
+  id            String           @id @default(cuid())
+  businessId    String
+  supplierId    String
+  supplierKey   String
+  accountId     String
+  documentId    String
+  expenseId     String           @unique
+  invoiceNumber String
+  date          DateTime
+  dueDate       DateTime?
+  kind          String
+  description   String?
+  netAmount     Decimal?         @db.Decimal(12, 2)
+  vatAmount     Decimal?         @db.Decimal(12, 2)
+  totalAmount   Decimal          @db.Decimal(12, 2)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  business      Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplier      Supplier         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  expense       Expense          @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  payments      InvoicePayment[]
+
+  @@unique([businessId, documentId])
+  @@unique([businessId, supplierKey, invoiceNumber])
+  @@unique([supplierId, invoiceNumber])
+  @@index([businessId, date])
+  @@index([supplierId, dueDate])
+}
+
+model InvoicePayment {
+  id            String          @id @default(cuid())
+  invoiceId     String
+  date          DateTime
+  amount        Decimal         @db.Decimal(12, 2)
+  method        String
+  transactionId String?         @unique
+  reference     String?
+  requestId     String          @unique
+  createdAt     DateTime        @default(now())
+  invoice       PurchaseInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  transaction   Transaction?    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, date])
+}
+
+model ProductCounter {
+  businessId String
+  kind String
+  value Int @default(0)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  @@id([businessId, kind])
+}
+model Product {
+  id String @id @default(cuid())
+  businessId String
+  code String
+  identity String
+  name String
+  brand String?
+  packSize String?
+  category String
+  kind String
+  unit String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  suppliers SupplierProduct[]
+  requestLines PurchaseRequestLine[]
+  catalogImports CatalogImportLine[]
+  @@unique([businessId, code])
+  @@unique([businessId, identity])
+}
+model SupplierProduct {
+  id String @id @default(cuid())
+  productId String
+  supplierId String
+  supplierCode String?
+  unitPrice Decimal? @db.Decimal(12,4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  @@unique([productId,supplierId])
+  @@unique([supplierId,supplierCode])
+}
+model SupplierDocument {
+  id String @id @default(cuid())
+  businessId String
+  supplierId String
+  accountId String
+  documentId String
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  @@unique([businessId,documentId])
+}
+model CatalogImportLine {
+  id String @id @default(cuid())
+  businessId String
+  accountId String
+  documentId String
+  lineNumber Int
+  supplierId String
+  productId String
+  quantity Decimal @db.Decimal(12,3)
+  unitPrice Decimal? @db.Decimal(12,4)
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  @@unique([businessId,documentId,lineNumber])
+}
+model PurchaseRequest {
+  id String @id @default(cuid())
+  businessId String
+  supplierId String
+  accountId String
+  creatorEmail String
+  number String
+  requestId String @unique
+  date DateTime
+  requiredDate DateTime?
+  notes String?
+  emailStatus String @default("NOT_SENT")
+  emailRecipient String?
+  emailSentAt DateTime?
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines PurchaseRequestLine[]
+  @@unique([businessId,number])
+  @@index([businessId,date])
+}
+model PurchaseRequestLine {
+  id String @id @default(cuid())
+  requestId String
+  productId String
+  code String
+  name String
+  unit String
+  supplierCode String?
+  quantity Decimal @db.Decimal(12,3)
+  unitPrice Decimal? @db.Decimal(12,4)
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  @@unique([requestId,productId])
+}
+model PortalUser {
+  id String @id @default(cuid())
+  businessId String
+  employeeId String? @unique
+  name String
+  email String
+  role String @default("STAFF")
+  accessState String @default("PLANNED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  @@unique([businessId,email])
 }

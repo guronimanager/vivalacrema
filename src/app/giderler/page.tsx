@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { InvoiceWorkspace } from "@/components/invoices/workspace";
 import { Sidebar } from "@/components/layout/sidebar";
 
 type Expense = {
@@ -199,6 +200,8 @@ export default function ExpensesPage() {
           <p className="text-sm text-zinc-500">Finans Yönetimi</p>
           <h1 className="mt-1 text-3xl font-semibold">Giderler</h1>
         </div>
+
+        <InvoiceWorkspace onSaved={refresh} />
 
         {loadError && (
           <p

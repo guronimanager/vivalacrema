@@ -1,4 +1,14 @@
+import { validateMetadata } from "@/lib/document-format";
 import { prisma } from "@/lib/prisma";
+import { assertOrigin, requireSession } from "@/lib/onedrive/security";
+import {
+  readDocument,
+  updatePendingDocument,
+  syncDocument,
+} from "@/lib/onedrive/documents";
+import { supplierIdentity } from "@/lib/invoices/input";
+import { serializable } from "@/lib/invoices/service";
+import { invoiceFailure } from "@/lib/invoices/errors";
 import { readInput, text, InputError, inputFailure } from "@/lib/record-input";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +30,8 @@ export async function GET() {
 
 async function save(request: Request, update: boolean) {
   try {
+    assertOrigin(request);
+    const current = await requireSession();
     const body = await readInput(request);
     const data = {
       name: text(body, "name", true),
@@ -48,12 +60,102 @@ async function save(request: Request, update: boolean) {
       const record = await prisma.supplier.update({ where: { id }, data });
       return Response.json({ success: true, record });
     }
-    const record = await prisma.supplier.create({
-      data: { ...data, businessId: business.id },
+    const documentId = text(body, "documentId");
+    if (documentId) {
+      const { document } = await readDocument(documentId, current.accountId);
+      validateMetadata({ ...document, date: text(body, "documentDate", true) });
+      if (
+        !["INVOICE_SERVICE", "INVOICE_MATERIAL", "ACCOUNTING"].includes(
+          document.kind,
+        )
+      )
+        throw new InputError("Tedarikçiye ait bir fatura veya evrak seçin.");
+    }
+    const record = await serializable(async (tx) => {
+      const suppliers = await tx.supplier.findMany({
+        where: { businessId: business.id },
+      });
+      const matches = suppliers.filter(
+        (s) =>
+          supplierIdentity(s.name, s.taxNumber) ===
+            supplierIdentity(data.name, data.taxNumber) ||
+          (supplierIdentity(s.name) === supplierIdentity(data.name) &&
+            (!s.taxNumber || !data.taxNumber)),
+      );
+      if (matches.length > 1)
+        throw new InputError(
+          "Birden fazla tedarikçi eşleşti; mevcut kayıtları kontrol edin.",
+        );
+      const invoice = documentId
+        ? await tx.purchaseInvoice.findUnique({
+            where: {
+              businessId_documentId: { businessId: business.id, documentId },
+            },
+          })
+        : null;
+      if (
+        invoice &&
+        (!matches.some((s) => s.id === invoice.supplierId) ||
+          invoice.accountId !== current.accountId)
+      )
+        throw new InputError(
+          "Evrak başka bir tedarikçiye veya kullanıcıya bağlı.",
+        );
+      const existingDocument = documentId
+        ? await tx.supplierDocument.findUnique({
+            where: {
+              businessId_documentId: { businessId: business.id, documentId },
+            },
+          })
+        : null;
+      if (existingDocument) {
+        const existing = await tx.supplier.findUnique({
+          where: { id: existingDocument.supplierId },
+        });
+        if (
+          !existing ||
+          supplierIdentity(existing.name) !== supplierIdentity(data.name)
+        )
+          throw new InputError("Evrak başka bir tedarikçiye bağlı.");
+        return existing;
+      }
+      const supplier =
+        matches[0] ||
+        (await tx.supplier.create({
+          data: { ...data, businessId: business.id },
+        }));
+      if (documentId)
+        await tx.supplierDocument.create({
+          data: {
+            businessId: business.id,
+            supplierId: supplier.id,
+            documentId,
+            accountId: current.accountId,
+          },
+        });
+      return supplier;
     });
-    return Response.json({ success: true, record }, { status: 201 });
+    let syncStatus;
+    if (documentId) {
+      const { document } = await readDocument(documentId, current.accountId);
+      await updatePendingDocument(
+        documentId,
+        {
+          ...document,
+          entity: record.name,
+          date: text(body, "documentDate", true),
+        },
+        current.accountId,
+      );
+      syncStatus = (await syncDocument(documentId, current.accountId))
+        .syncStatus;
+    }
+    return Response.json(
+      { success: true, record, syncStatus },
+      { status: 201 },
+    );
   } catch (error) {
-    return inputFailure(error);
+    return invoiceFailure(error);
   }
 }
 

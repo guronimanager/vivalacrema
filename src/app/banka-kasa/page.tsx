@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { StatementWorkspace } from "@/components/statements/workspace";
 
 type BankAccount = {
   id: string;
@@ -314,6 +315,8 @@ export default function BankCashPage() {
           Bakiyeler güncel hesap bakiyeleridir. Dönem filtresi hareketleri ve
           SumUp komisyonunu etkiler; payout bir transferdir.
         </p>
+
+        <StatementWorkspace accounts={accounts} onSaved={refreshAll} />
 
         <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

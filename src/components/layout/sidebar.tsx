@@ -12,6 +12,7 @@ import {
   Euro,
   Truck,
   ChartNoAxesCombined,
+  FolderArchive,
 } from "lucide-react";
 
 const items = [
@@ -20,10 +21,13 @@ const items = [
   { label: "Banka & Kasa", href: "/banka-kasa", icon: Landmark },
   { label: "Giderler", href: "/giderler", icon: ReceiptText },
   { label: "Satın Alma", href: "/satin-alma", icon: PackageSearch },
+  { label: "Ürünler", href: "/urunler", icon: PackageSearch },
+  { label: "Kullanıcılar", href: "/kullanicilar", icon: Users },
   { label: "Personel", href: "/personel", icon: Users },
   { label: "Vergiler", href: "/vergiler", icon: Euro },
   { label: "Tedarikçiler", href: "/tedarikciler", icon: Truck },
   { label: "Raporlar", href: "/raporlar", icon: ChartNoAxesCombined },
+  { label: "Evrak Arşivi", href: "/evraklar", icon: FolderArchive },
 ];
 
 export function Sidebar() {

@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import {
-  AccountType,
-  TransactionType,
-} from "@prisma/client";
+import { queryPeriod } from "@/lib/period";
+import { AccountType, TransactionType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +29,7 @@ async function getTillhubToken() {
         api_key: apiKey,
       }),
       cache: "no-store",
-    }
+    },
   );
 
   const data = await response.json();
@@ -46,10 +44,7 @@ async function getTillhubToken() {
   };
 }
 
-async function getTillhubDashboardData(
-  startDate: string,
-  endDate: string
-) {
+async function getTillhubDashboardData(startDate: string, endDate: string) {
   const { token, accountId } = await getTillhubToken();
 
   const start = `${startDate}T00:00:00.000Z`;
@@ -66,34 +61,31 @@ async function getTillhubDashboardData(
     `?start=${encodeURIComponent(start)}` +
     `&end=${encodeURIComponent(end)}`;
 
-  const [paymentsResponse, transactionsResponse] =
-    await Promise.all([
-      fetch(paymentsUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      }),
+  const [paymentsResponse, transactionsResponse] = await Promise.all([
+    fetch(paymentsUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }),
 
-      fetch(transactionsUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      }),
-    ]);
+    fetch(transactionsUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }),
+  ]);
 
   if (!paymentsResponse.ok) {
-    throw new Error(
-      `TillHub payments failed: ${paymentsResponse.status}`
-    );
+    throw new Error(`TillHub payments failed: ${paymentsResponse.status}`);
   }
 
   if (!transactionsResponse.ok) {
     throw new Error(
-      `TillHub transactions failed: ${transactionsResponse.status}`
+      `TillHub transactions failed: ${transactionsResponse.status}`,
     );
   }
 
@@ -106,15 +98,21 @@ async function getTillhubDashboardData(
     : [];
 
   const cash = paymentValues.find(
-    (item: any) =>
-      item?.name === "Bar" ||
-      item?.payment_type === "cash"
+    (item: {
+      name?: string;
+      payment_type?: string;
+      sum?: number | string;
+      payment_count?: number;
+    }) => item?.name === "Bar" || item?.payment_type === "cash",
   );
 
   const card = paymentValues.find(
-    (item: any) =>
-      item?.name === "Kartenzahlung" ||
-      item?.payment_type === "card"
+    (item: {
+      name?: string;
+      payment_type?: string;
+      sum?: number | string;
+      payment_count?: number;
+    }) => item?.name === "Kartenzahlung" || item?.payment_type === "card",
   );
 
   const cashTotal = Number(cash?.sum ?? 0);
@@ -123,8 +121,7 @@ async function getTillhubDashboardData(
   const cashCount = Number(cash?.payment_count ?? 0);
   const cardCount = Number(card?.payment_count ?? 0);
 
-  const transactionReport =
-    transactionsData?.results?.[0];
+  const transactionReport = transactionsData?.results?.[0];
 
   const rows = Array.isArray(transactionReport?.results)
     ? transactionReport.results
@@ -138,14 +135,9 @@ async function getTillhubDashboardData(
     const date = new Date(row.date);
     const key = date.toISOString().slice(0, 10);
 
-    const amount = Number(
-      row?.selling_price_total ?? 0
-    );
+    const amount = Number(row?.selling_price_total ?? 0);
 
-    dailyMap.set(
-      key,
-      (dailyMap.get(key) ?? 0) + amount
-    );
+    dailyMap.set(key, (dailyMap.get(key) ?? 0) + amount);
   }
 
   const daily = Array.from(dailyMap.entries())
@@ -166,36 +158,22 @@ async function getTillhubDashboardData(
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  let period;
   try {
-    const now = new Date();
-
-    const monthStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1
+    period = queryPeriod(new URL(request.url).searchParams);
+  } catch (error) {
+    return Response.json(
+      { success: false, message: (error as Error).message },
+      { status: 400 },
     );
-
-    const nextMonthStart = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      1
-    );
-
-    const startDate = monthStart
-      .toISOString()
-      .slice(0, 10);
-
-    const endDate = nextMonthStart
-      .toISOString()
-      .slice(0, 10);
-
-    const [
-      tillhubData,
-      expenses,
-      bankAccounts,
-      sumupFees,
-    ] = await Promise.all([
+  }
+  try {
+    const monthStart = new Date(`${period.start}T00:00:00Z`);
+    const nextMonthStart = new Date(`${period.endExclusive}T00:00:00Z`);
+    const startDate = period.start;
+    const endDate = period.endExclusive;
+    const [tillhubData, expenses, bankAccounts, sumupFees] = await Promise.all([
       getTillhubDashboardData(startDate, endDate),
 
       prisma.expense.findMany({
@@ -229,155 +207,88 @@ export async function GET() {
     ]);
 
     const manualExpenseTotal = expenses.reduce(
-      (sum, expense) =>
-        sum + Number(expense.amount),
-      0
+      (sum, expense) => sum + Number(expense.amount),
+      0,
     );
 
     const sumupFeeTotal = sumupFees.reduce(
-      (sum, transaction) =>
-        sum + Number(transaction.amount),
-      0
+      (sum, transaction) => sum + Number(transaction.amount),
+      0,
     );
 
-    const expenseTotal = round2(
-      manualExpenseTotal + sumupFeeTotal
-    );
+    const expenseTotal = round2(manualExpenseTotal + sumupFeeTotal);
 
     const expenseCategories = expenses.reduce(
       (acc, expense) => {
-        const category =
-          expense.category || "Diğer";
+        const category = expense.category || "Diğer";
 
         const amount = Number(expense.amount);
 
-        acc[category] =
-          (acc[category] ?? 0) + amount;
+        acc[category] = (acc[category] ?? 0) + amount;
 
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
 
     if (sumupFeeTotal > 0) {
-      expenseCategories["SumUp Komisyonu"] =
-        round2(
-          (expenseCategories["SumUp Komisyonu"] ?? 0) +
-            sumupFeeTotal
-        );
+      expenseCategories["SumUp Komisyonu"] = round2(
+        (expenseCategories["SumUp Komisyonu"] ?? 0) + sumupFeeTotal,
+      );
     }
 
     const bankBalance = round2(
       bankAccounts
-        .filter(
-          (account) =>
-            account.type === AccountType.BANK
-        )
-        .reduce(
-          (sum, account) =>
-            sum + Number(account.balance),
-          0
-        )
+        .filter((account) => account.type === AccountType.BANK)
+        .reduce((sum, account) => sum + Number(account.balance), 0),
     );
 
     const cashBalance = round2(
       bankAccounts
-        .filter(
-          (account) =>
-            account.type === AccountType.CASH
-        )
-        .reduce(
-          (sum, account) =>
-            sum + Number(account.balance),
-          0
-        )
+        .filter((account) => account.type === AccountType.CASH)
+        .reduce((sum, account) => sum + Number(account.balance), 0),
     );
 
     const sumupBalance = round2(
       bankAccounts
+        .filter((account) => account.type === AccountType.SUMUP)
+        .reduce((sum, account) => sum + Number(account.balance), 0),
+    );
+
+    const totalLiquidity = round2(bankBalance + cashBalance + sumupBalance);
+
+    const chart = Array.from({ length: period.days }, (_, index) => {
+      const date = new Date(monthStart);
+      date.setUTCDate(date.getUTCDate() + index);
+      const dateKey = date.toISOString().slice(0, 10);
+      const tillhubDay = tillhubData.daily.find(
+        (item) => item.date === dateKey,
+      );
+      const manualDayExpenses = expenses
         .filter(
-          (account) =>
-            account.type === AccountType.SUMUP
+          (expense) => expense.date.toISOString().slice(0, 10) === dateKey,
         )
-        .reduce(
-          (sum, account) =>
-            sum + Number(account.balance),
-          0
-        )
-    );
-
-    const totalLiquidity = round2(
-      bankBalance +
-        cashBalance +
-        sumupBalance
-    );
-
-    const daysInMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0
-    ).getDate();
-
-    const chart = Array.from(
-      { length: daysInMonth },
-      (_, index) => {
-        const day = index + 1;
-
-        const dateKey =
-          `${now.getFullYear()}-` +
-          `${String(now.getMonth() + 1).padStart(2, "0")}-` +
-          `${String(day).padStart(2, "0")}`;
-
-        const tillhubDay =
-          tillhubData.daily.find(
-            (item) => item.date === dateKey
-          );
-
-        const manualDayExpenses = expenses
-          .filter(
-            (expense) =>
-              expense.date.getDate() === day
-          )
-          .reduce(
-            (sum, expense) =>
-              sum + Number(expense.amount),
-            0
-          );
-
-        const sumupDayFees = sumupFees
-          .filter(
-            (transaction) =>
-              transaction.date.getDate() === day
-          )
-          .reduce(
-            (sum, transaction) =>
-              sum + Number(transaction.amount),
-            0
-          );
-
-        return {
-          day,
-          label: `${day} ${now.toLocaleString(
-            "tr-TR",
-            { month: "short" }
-          )}`,
-          revenue:
-            tillhubDay?.revenue ?? 0,
-          expenses: round2(
-            manualDayExpenses + sumupDayFees
-          ),
-        };
-      }
-    );
+        .reduce((sum, expense) => sum + Number(expense.amount), 0);
+      const sumupDayFees = sumupFees
+        .filter((item) => item.date.toISOString().slice(0, 10) === dateKey)
+        .reduce((sum, item) => sum + Number(item.amount), 0);
+      return {
+        day: index + 1,
+        date: dateKey,
+        label: date.toLocaleDateString("tr-TR", {
+          day: "numeric",
+          month: "short",
+          timeZone: "UTC",
+        }),
+        revenue: tillhubDay?.revenue ?? 0,
+        expenses: round2(manualDayExpenses + sumupDayFees),
+      };
+    });
 
     return Response.json({
       success: true,
 
-      period: {
-        start: monthStart,
-        end: nextMonthStart,
-        label: now.toLocaleDateString("tr-TR", { month: "long", year: "numeric" }),
-      },
+      period,
 
       revenue: tillhubData.total,
 
@@ -388,9 +299,7 @@ export async function GET() {
         sumupFees: round2(sumupFeeTotal),
       },
 
-      netProfit: round2(
-        tillhubData.total - expenseTotal
-      ),
+      netProfit: round2(tillhubData.total - expenseTotal),
 
       sales: {
         cash: tillhubData.cashTotal,
@@ -405,7 +314,10 @@ export async function GET() {
 
       chart,
       expenseCategories: Object.fromEntries(
-        Object.entries(expenseCategories).map(([category, amount]) => [category, round2(amount)])
+        Object.entries(expenseCategories).map(([category, amount]) => [
+          category,
+          round2(amount),
+        ]),
       ),
 
       tillhub: {
@@ -414,23 +326,18 @@ export async function GET() {
         total: tillhubData.total,
         cashCount: tillhubData.cashCount,
         cardCount: tillhubData.cardCount,
-        paymentCount:
-          tillhubData.paymentCount,
+        paymentCount: tillhubData.paymentCount,
       },
     });
-  } catch (error) {
-    console.error(
-      "GET /api/dashboard:",
-      error
-    );
+  } catch {
+    console.error("GET /api/dashboard başarısız.");
 
     return Response.json(
       {
         success: false,
-        message:
-          "Dashboard verileri alınamadı.",
+        message: "Dashboard verileri alınamadı.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
