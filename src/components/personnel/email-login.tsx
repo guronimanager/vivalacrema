@@ -2,7 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { useSignIn } from "@clerk/nextjs";
 import { Field, Notice, buttonClass, inputClass } from "@/components/finance/ui";
-export function EmployeeEmailLogin() {
+export function EmployeeEmailLogin({ afterLogin }: { afterLogin?: string } = {}) {
   const { signIn, fetchStatus } = useSignIn();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -22,7 +22,7 @@ export function EmployeeEmailLogin() {
         const result = await signIn.emailCode.verifyCode({ code });
         if (result.error) throw new Error("Kod geçersiz veya süresi dolmuş.");
         if (signIn.status !== "complete") throw new Error("Ek doğrulama gerekiyor. Yöneticinizle iletişime geçin.");
-        await signIn.finalize({ navigate: () => { window.location.reload(); } });
+        await signIn.finalize({ navigate: () => { if (afterLogin) window.location.assign(afterLogin); else window.location.reload(); } });
       }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Giriş tamamlanamadı."); }
     finally { setBusy(false); }

@@ -36,11 +36,11 @@ export function cookieOptions(origin: string, maxAge: number) {
 }
 export function assertOrigin(request: Request) {
   const expected = process.env.ONEDRIVE_REDIRECT_URI;
-  if (!expected || request.headers.get("origin") !== new URL(expected).origin) throw new ArchiveError("Bu isteğe izin verilmiyor.", 403);
+  if (!expected || request.headers.get("origin") !== new URL(request.url).origin) throw new ArchiveError("Bu isteğe izin verilmiyor.", 403);
 }
 export interface ArchiveSession { accountId: string; email: string; expiresAt: number }
-export async function session(): Promise<ArchiveSession | null> {
-  const raw = (await cookies()).get(sessionCookie)?.value;
+export async function session(cookieValue?: string): Promise<ArchiveSession | null> {
+  const raw = cookieValue ?? (await cookies()).get(sessionCookie)?.value;
   if (!raw) return null;
   try {
     const value = unseal<ArchiveSession>(raw, "session");
@@ -48,9 +48,14 @@ export async function session(): Promise<ArchiveSession | null> {
   } catch { return null; }
 }
 export async function requireSession() {
+  const { requirePortal } = await import("@/lib/users/auth");
+  const user = await requirePortal();
   const value = await session();
-  if (!value) throw new ArchiveError("Evraklara erişmek için kişisel Microsoft hesabınızla giriş yapın.", 401);
-  return value;
+  if (user.id === "owner" && value) return value;
+  const { readConnection } = await import("@/lib/onedrive/connection");
+  const connection = await readConnection();
+  if (!connection) throw new ArchiveError("İşletmenin OneDrive arşivi bağlı değil.", 503);
+  return { accountId: connection.accountId, email: user.email, expiresAt: Date.now() + 60_000 };
 }
 export function failure(error: unknown) {
   return Response.json({ success: false, message: error instanceof ArchiveError ? error.message : "İşlem tamamlanamadı. Bağlantıyı kontrol edip yeniden deneyin." }, { status: error instanceof ArchiveError ? error.status : 502, headers: { "Cache-Control": "no-store" } });

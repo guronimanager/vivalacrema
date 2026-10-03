@@ -1,0 +1,1 @@
+ALTER TABLE "PortalUser" ADD COLUMN "permissions" JSONB NOT NULL DEFAULT '{}';

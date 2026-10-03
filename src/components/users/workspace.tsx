@@ -9,12 +9,19 @@ import {
   panelClass,
 } from "@/components/finance/ui";
 import { clientApi } from "@/lib/client-api";
+import {
+  defaults,
+  modules,
+  type Module,
+  type Permissions,
+} from "@/lib/users/permissions";
 interface User {
   id: string;
   name: string;
   email: string;
   role: string;
   accessState: string;
+  permissions: Permissions;
   employeeId: string | null;
   employee: { name: string } | null;
 }
@@ -24,8 +31,14 @@ const blank = () => ({
   email: "",
   role: "STAFF",
   employeeId: "",
-  documentAccess: false,
+  accessEnabled: false,
+  permissions: {} as Permissions,
 });
+const roles: Record<string, string> = {
+  ADMIN: "Yönetici",
+  ACCOUNTANT: "Muhasebe",
+  STAFF: "Personel",
+};
 export function UsersWorkspace() {
   const [records, setRecords] = useState<User[]>([]),
     [employees, setEmployees] = useState<{ id: string; name: string }[]>([]),
@@ -34,7 +47,8 @@ export function UsersWorkspace() {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
-    [version, setVersion] = useState(0);
+    [version, setVersion] = useState(0),
+    [search, setSearch] = useState("");
   useEffect(() => {
     let ignore = false;
     Promise.all([
@@ -58,11 +72,16 @@ export function UsersWorkspace() {
   async function save() {
     setBusy(true);
     setError("");
+    setMessage("");
     try {
       await clientApi("/api/users", draft, draft.id ? "PATCH" : "POST");
       setDraft(blank());
       setVersion((v) => v + 1);
-      setMessage(draft.documentAccess ? "Personelin yalnızca kendi evraklarına giriş yetkisi açıldı." : "Profil kaydedildi. Personel evrak erişimi kapalı.");
+      setMessage(
+        draft.accessEnabled
+          ? "Kullanıcı ve sayfa yetkileri kaydedildi. Onaylı e-posta ile giriş açık."
+          : "Kullanıcı kaydedildi; giriş kapalı.",
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -71,13 +90,14 @@ export function UsersWorkspace() {
   }
   return (
     <FinancePage
-      title="Kullanıcılar"
-      description="Personelin onaylı e-posta adresini ve kendi evraklarına erişimini yönetin."
+      title="Kullanıcılar ve Yetkiler"
+      description="E-posta ile giriş yapacak kullanıcıları, rollerini ve sayfa yetkilerini yönetin."
     >
       <p className="mb-5 text-sm text-zinc-400">
-        Mevcut oturum: {currentEmail || "Microsoft bağlantısı gerekli"}. Satın
-        alma e-postalarında talebi oluşturan oturumun doğrulanmış adresi
-        kullanılır.
+        Mevcut oturum: {currentEmail || "Kontrol ediliyor…"}.{" "}
+        <a className="underline" href="/giris">
+          Kullanıcı giriş sayfası
+        </a>
       </p>
       <Notice error={error} message={message} />
       <form
@@ -88,7 +108,7 @@ export function UsersWorkspace() {
         }}
       >
         <h2 className="mb-4 text-xl">
-          {draft.id ? "Profili düzenle" : "Kullanıcı profili oluştur"}
+          {draft.id ? "Kullanıcıyı düzenle" : "Yeni kullanıcı"}
         </h2>
         <fieldset disabled={busy} className="grid gap-4 md:grid-cols-2">
           <Field label="Ad soyad">
@@ -100,31 +120,52 @@ export function UsersWorkspace() {
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
           </Field>
-          <Field label="Yönetici onaylı personel e-postası">
+          <Field label="Giriş e-posta adresi">
             <input
               className={inputClass}
               required
               type="email"
               value={draft.email}
-              onChange={(e) => setDraft({ ...draft, email: e.target.value, documentAccess: false })}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  email: e.target.value,
+                  accessEnabled: false,
+                })
+              }
             />
           </Field>
-          <Field label="Planlanan rol">
+          <Field label="Rol">
             <select
               className={inputClass}
               value={draft.role}
-              onChange={(e) => setDraft({ ...draft, role: e.target.value, documentAccess: false })}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  role: e.target.value,
+                  permissions: defaults(e.target.value),
+                  accessEnabled: false,
+                })
+              }
             >
-              <option value="STAFF">Personel</option>
-              <option value="ADMIN">Yönetici</option>
+              {Object.entries(roles).map(([role, label]) => (
+                <option key={role} value={role}>
+                  {label}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="Personel kaydı">
+          <Field label="Personel bağlantısı (Personel rolü için gerekli)">
             <select
               className={inputClass}
+              required={draft.role === "STAFF" && draft.accessEnabled}
               value={draft.employeeId}
               onChange={(e) =>
-                setDraft({ ...draft, employeeId: e.target.value, documentAccess: false })
+                setDraft({
+                  ...draft,
+                  employeeId: e.target.value,
+                  accessEnabled: false,
+                })
               }
             >
               <option value="">Bağlantı yok</option>
@@ -135,54 +176,123 @@ export function UsersWorkspace() {
               ))}
             </select>
           </Field>
-          <Field label="Evrak gönderimini ve personel girişini onaylıyorum">
-            <input type="checkbox" checked={draft.documentAccess} disabled={draft.role !== "STAFF" || !draft.employeeId} onChange={e => setDraft({ ...draft, documentAccess: e.target.checked })} />
+          <Field label="Bu e-posta ile girişi onaylıyorum">
+            <input
+              type="checkbox"
+              checked={draft.accessEnabled}
+              onChange={(e) =>
+                setDraft({ ...draft, accessEnabled: e.target.checked })
+              }
+            />
           </Field>
         </fieldset>
-        <p className="mt-4 text-sm text-zinc-400">Personelin kullandığı e-posta adresini girin. Erişim açıldığında /evraklarim üzerinden yalnızca kendisine bağlı belgeleri indirir. Yönetici rolü henüz ek giriş yetkisi vermez.</p>
+        <p className="my-4 text-sm text-zinc-400">
+          Giriş e-postası değiştiğinde onay yeniden seçilir. Erişim
+          kapatıldığında mevcut oturumun sonraki isteği reddedilir. Personel
+          yalnızca kendisine bağlı evraklara erişir; aşağıdan ek sayfalar
+          verilebilir.
+        </p>
+        <h3 className="font-semibold">Sayfa yetkileri</h3>
+        {draft.role === "ADMIN" ? (
+          <p className="mt-3 text-sm text-zinc-400">
+            Yönetici tüm sayfalara ve kullanıcı yönetimine erişir.
+          </p>
+        ) : (
+          <fieldset disabled={busy} className="mt-3 grid gap-3 md:grid-cols-2">
+            {Object.entries(modules)
+              .filter(([key]) => key !== "users")
+              .map(([key, value]) => (
+                <Field key={key} label={value.label}>
+                  <select
+                    className={inputClass}
+                    value={draft.permissions[key as Module] || ""}
+                    onChange={(e) => {
+                      const permissions = { ...draft.permissions };
+                      if (e.target.value)
+                        permissions[key as Module] = e.target.value as
+                          | "READ"
+                          | "WRITE";
+                      else delete permissions[key as Module];
+                      setDraft({ ...draft, permissions });
+                    }}
+                  >
+                    <option value="">Erişim yok</option>
+                    <option value="READ">Görüntüle</option>
+                    <option value="WRITE">Görüntüle ve düzenle</option>
+                  </select>
+                </Field>
+              ))}
+          </fieldset>
+        )}
+        <p className="mt-4 text-sm text-zinc-400">
+          Evrak Arşivi yetkisi işletme arşivindeki belgeleri kapsar. Fatura
+          tarama için Giderler ve Evrak Arşivi, kullanıcı yönetimi için Yönetici
+          rolü gerekir.
+        </p>
         <button className={`${buttonClass} mt-4`} disabled={busy}>
-          Profili kaydet
+          Kullanıcıyı ve yetkileri kaydet
         </button>
         <button
           type="button"
           className="ml-4 underline"
+          disabled={busy}
           onClick={() => setDraft(blank())}
         >
-          Yeni profil
+          Yeni kullanıcı
         </button>
       </form>
       <section className={`${panelClass} mt-6`}>
-        <h2 className="mb-4 text-xl">Kullanıcılar</h2>
-        <a className="mb-4 inline-block underline" href="/evraklarim">Personel evrak giriş sayfası</a>
-        {records.map((u) => (
-          <div
-            key={u.id}
-            className="flex flex-wrap justify-between gap-3 border-t border-zinc-700 py-4"
-          >
-            <div>
-              {u.name} · {u.email}
-              <p className="text-sm text-zinc-400">
-                {u.role === "ADMIN" ? "Yönetici" : "Personel"} ·{" "}
-                {u.employee?.name || "Personel bağlantısı yok"} · {u.accessState === "ACTIVE" ? "Kendi evraklarına erişim açık" : "Giriş etkin değil"}
-              </p>
-            </div>
-            <button
-              className="underline"
-              onClick={() =>
-                setDraft({
-                  id: u.id,
-                  name: u.name,
-                  email: u.email,
-                  role: u.role,
-                  employeeId: u.employeeId || "",
-                  documentAccess: u.accessState === "ACTIVE",
-                })
-              }
+        <h2 className="mb-4 text-xl">Kayıtlı kullanıcılar</h2>
+        <Field label="İsim veya e-posta ile ara">
+          <input
+            className={inputClass}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </Field>
+        {records
+          .filter((u) =>
+            `${u.name} ${u.email}`
+              .toLocaleLowerCase("tr")
+              .includes(search.toLocaleLowerCase("tr")),
+          )
+          .map((u) => (
+            <div
+              key={u.id}
+              className="flex flex-wrap justify-between gap-3 border-t border-zinc-700 py-4"
             >
-              Düzenle
-            </button>
-          </div>
-        ))}
+              <div>
+                {u.name} · {u.email}
+                <p className="text-sm text-zinc-400">
+                  {roles[u.role] || u.role} ·{" "}
+                  {u.employee?.name || "Personel bağlantısı yok"} ·{" "}
+                  {u.accessState === "ACTIVE" ? "Giriş açık" : "Giriş kapalı"}
+                </p>
+              </div>
+              <button
+                className="underline"
+                disabled={busy}
+                onClick={() => {
+                  setDraft({
+                    id: u.id,
+                    name: u.name,
+                    email: u.email,
+                    role: u.role,
+                    employeeId: u.employeeId || "",
+                    accessEnabled: u.accessState === "ACTIVE",
+                    permissions: u.permissions || {},
+                  });
+                  setMessage("");
+                  setError("");
+                }}
+              >
+                Düzenle
+              </button>
+            </div>
+          ))}
+        {!records.length ? (
+          <p className="mt-4 text-zinc-400">Henüz kullanıcı kaydı yok.</p>
+        ) : null}
       </section>
     </FinancePage>
   );

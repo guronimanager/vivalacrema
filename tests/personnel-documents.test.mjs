@@ -88,7 +88,7 @@ test('Direct file IDs never bypass employee ownership and downloads remain priva
 test('Staff identity does not grant management employee or user endpoints',async () => {
  let databaseReads=0;
  for(const file of ['src/app/api/employees/route.ts','src/app/api/users/route.ts']) {
-  const api=loadTypeScript(file,{'@/lib/personnel/clerk':{ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,requireSession:async()=>{throw new ArchiveError('Owner session required',401);},assertOrigin:()=>{}},'@/lib/prisma':{prisma:{business:{findFirst:async()=>{databaseReads++;return business;}}}}});
+  const api=loadTypeScript(file,{'@/lib/users/auth':{requirePortal:async()=>{throw new ArchiveError('Administrator session required',401);}},'@/lib/personnel/clerk':{ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,requireSession:async()=>{throw new ArchiveError('Owner session required',401);},assertOrigin:()=>{}},'@/lib/prisma':{prisma:{business:{findFirst:async()=>{databaseReads++;return business;}}}}});
   assert.equal((await api.GET()).status,401);
   assert.equal((await api.POST(new Request('https://example.test',{method:'POST',body:'{}'}))).status,401);
  }
@@ -119,7 +119,7 @@ test('Upload completion preserves employee binding, deduplicates and refuses cro
 });
 test('Only linked active STAFF profiles can receive explicit document access; profiles default closed',async()=>{
  let records=[];const usersDb={...db,employee:{findFirst:async({where})=>where.id===employee.id&&where.businessId===business.id&&(!where.active||employee.active)?employee:null},portalUser:{...db.portalUser,create:async({data})=>{records.push(data);return data;}}};
- const api=loadTypeScript('src/app/api/users/route.ts',{'@/lib/prisma':{prisma:usersDb}, '@/lib/personnel/clerk': {ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,assertOrigin:()=>{},requireSession:async()=>({accountId:'owner-account',email:'owner@example.test'})}});
+ const api=loadTypeScript('src/app/api/users/route.ts',{'@/lib/users/auth':{requirePortal:async()=>({email:'owner@example.test'})},'@/lib/prisma':{prisma:usersDb}, '@/lib/personnel/clerk': {ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,assertOrigin:()=>{},requireSession:async()=>({accountId:'owner-account',email:'owner@example.test'})}});
  const submit=data=>api.POST(new Request('https://example.test/api/users',{method:'POST',body:JSON.stringify({name:user.name||'Personel A',email:user.email,role:'STAFF',employeeId:employee.id,...data})}));
  for(const data of [{role:'ADMIN',documentAccess:true},{employeeId:'',documentAccess:true},{employeeId:'unknown',documentAccess:true}]) assert.equal((await submit(data)).status,400);
  employee.active=false;

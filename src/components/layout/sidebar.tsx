@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { PortalLogout } from "@/components/users/logout";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -32,6 +34,8 @@ const items = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [pages, setPages] = useState<string[]>([]);
+  useEffect(() => { let active = true; fetch("/api/auth/me", { cache: "no-store" }).then(async response => { if (!response.ok) return; const result = await response.json(); if (active) setPages(result.pages.map((page: { path: string }) => page.path)); }).catch(() => {}); return () => { active = false; }; }, [pathname]);
 
   return (
     <aside className="min-h-screen w-16 shrink-0 border-r border-zinc-800 bg-zinc-950 p-2 md:w-64 md:p-5">
@@ -46,7 +50,7 @@ export function Sidebar() {
       </div>
 
       <nav className="space-y-2">
-        {items.map((item) => {
+        {items.filter(item => pages.includes(item.href)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href;
 
@@ -69,6 +73,7 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="mt-6"><PortalLogout /></div>
     </aside>
   );
 }

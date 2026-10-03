@@ -317,6 +317,7 @@ model PortalUser {
   email String
   role String @default("STAFF")
   accessState String @default("PLANNED")
+  permissions Json @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)

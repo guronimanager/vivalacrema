@@ -27,7 +27,7 @@ export function EmployeeLoginAccess({ employees }: { employees: Employee[] }) {
   }, [version]);
   const employee = employees.find(value => value.id === employeeId);
   const profile = profiles.find(value => value.employeeId === employeeId);
-  const managementProfile = profile?.role === "ADMIN";
+  const managementProfile = Boolean(profile && profile.role !== "STAFF");
   function selectEmployee(id: string) {
     const current = profiles.find(value => value.employeeId === id);
     setEmployeeId(id); setEmail(current?.email || "");
@@ -61,7 +61,7 @@ export function EmployeeLoginAccess({ employees }: { employees: Employee[] }) {
         <Field label="Yönetici onaylı personel e-postası"><input type="email" required maxLength={254} autoComplete="off" disabled={!employee || managementProfile} className={inputClass} value={email} onChange={event => { setEmail(event.target.value); setApproved(false); }} /></Field>
         <Field label="Evrak gönderimini ve personel girişini onaylıyorum"><input type="checkbox" checked={approved} disabled={!employee?.active || managementProfile} onChange={event => setApproved(event.target.checked)} /></Field>
       </fieldset>
-      {managementProfile ? <p className="mt-4 text-sm text-amber-300">Bu personelin yönetici profili var. <Link href="/kullanicilar" className="underline">Kullanıcılar sayfasından yönetin.</Link></p> : null}
+      {managementProfile ? <p className="mt-4 text-sm text-amber-300">Bu personelin yönetici veya muhasebe profili var. <Link href="/kullanicilar" className="underline">Kullanıcılar sayfasından yönetin.</Link></p> : null}
       <p className="mt-4 text-sm text-zinc-400">Evraklar bu adrese gönderilir; Gmail dahil tüm adresler desteklenir. Portal girişi e-posta doğrulama koduyla yapılır. Onayı kaldırmak veya e-postayı değiştirmek açık personel oturumunu geçersiz kılar.</p>
       <button disabled={busy || loading || !employee || managementProfile} className={`${buttonClass} mt-4`}>{busy ? "Kaydediliyor…" : "Giriş e-postası ve onayı kaydet"}</button>
     </form>
