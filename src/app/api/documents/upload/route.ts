@@ -25,7 +25,8 @@ export async function POST(request: Request) {
         let metadata;
         try {
           metadata = await employeeMetadata(JSON.parse(clientPayload || "null"));
-        } catch {
+        } catch (error) {
+          if (error instanceof ArchiveError) throw error;
           throw new ArchiveError("Belge bilgileri geçersiz.");
         }
         return {
