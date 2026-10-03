@@ -1,3 +1,4 @@
+import { sendEmployeeDocument } from "@/lib/personnel/email";
 import { type DocumentMetadata } from "@/lib/document-format";
 import {
   finalizeDocument,
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
         ? document
         : await syncDocument(document.id, current.accountId);
     return Response.json(
-      { success: true, document: publicDocument(synced) },
+      { success: true, document: publicDocument(synced.notifyEmployee ? await sendEmployeeDocument(synced.id, current.accountId) : synced) },
       { status: 201 },
     );
   } catch (error) {

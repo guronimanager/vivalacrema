@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EmployeeLoginAccess } from "@/components/personnel/login-access";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   FinancePage,
@@ -160,7 +161,7 @@ export function RecordManager({
 
   return (
     <FinancePage title={title} description={description}>
-      {employeeDocuments && <p className="mb-5 text-sm text-zinc-400">Personel evraklarını yönetmek için <Link className="underline" href="/evraklar">Evrak Arşivi’nden Microsoft hesabınızla giriş yapın</Link>. Personelin kendi evraklarına giriş yetkisi Kullanıcılar sayfasında açılır.</p>}
+      {employeeDocuments && <p className="mb-5 text-sm text-zinc-400">Personel evraklarını yönetmek için <Link className="underline" href="/evraklar">Evrak Arşivi’nden Microsoft hesabınızla giriş yapın</Link>. Personelin giriş e-postasını ve yönetici onayını aşağıdaki bölümden yönetin.</p>}
       <Notice error={error} />
       {summaries.length > 0 && (
         <div className="mb-6 grid gap-4 md:grid-cols-3">
@@ -318,6 +319,7 @@ export function RecordManager({
           </div>
         </div>
       </div>
+      {employeeDocuments && <EmployeeLoginAccess employees={records.map(record => ({ id: record.id, name: String(record.name || ""), active: record.active === true }))} />}
     </FinancePage>
   );
 }

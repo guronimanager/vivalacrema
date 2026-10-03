@@ -24,7 +24,7 @@ function sessionModule(raw, prisma=db, msal) {
  return loadTypeScript('src/lib/personnel/session.ts', {
   'next/headers': { cookies:async () => ({ get: () => raw ? {value:typeof raw==='string'?raw:JSON.stringify(raw)}:undefined }) },
   '@/lib/prisma': {prisma}, '@/lib/onedrive/security': security,
-  '@/lib/onedrive/connection': {msal},
+  '@/lib/onedrive/connection': {msal}, './clerk': {clerkEmployee:async()=>null},
  });
 }
 function sessionValue(overrides={}) { return {userId:user.id, employeeId:employee.id, email:user.email, version:user.updatedAt.toISOString(), accountId:'staff-account', expiresAt:Date.now()+60000, ...overrides}; }
@@ -88,7 +88,7 @@ test('Direct file IDs never bypass employee ownership and downloads remain priva
 test('Staff identity does not grant management employee or user endpoints',async () => {
  let databaseReads=0;
  for(const file of ['src/app/api/employees/route.ts','src/app/api/users/route.ts']) {
-  const api=loadTypeScript(file,{'@/lib/onedrive/security':{...security,requireSession:async()=>{throw new ArchiveError('Owner session required',401);},assertOrigin:()=>{}},'@/lib/prisma':{prisma:{business:{findFirst:async()=>{databaseReads++;return business;}}}}});
+  const api=loadTypeScript(file,{'@/lib/personnel/clerk':{ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,requireSession:async()=>{throw new ArchiveError('Owner session required',401);},assertOrigin:()=>{}},'@/lib/prisma':{prisma:{business:{findFirst:async()=>{databaseReads++;return business;}}}}});
   assert.equal((await api.GET()).status,401);
   assert.equal((await api.POST(new Request('https://example.test',{method:'POST',body:'{}'}))).status,401);
  }
@@ -119,7 +119,7 @@ test('Upload completion preserves employee binding, deduplicates and refuses cro
 });
 test('Only linked active STAFF profiles can receive explicit document access; profiles default closed',async()=>{
  let records=[];const usersDb={...db,employee:{findFirst:async({where})=>where.id===employee.id&&where.businessId===business.id&&(!where.active||employee.active)?employee:null},portalUser:{...db.portalUser,create:async({data})=>{records.push(data);return data;}}};
- const api=loadTypeScript('src/app/api/users/route.ts',{'@/lib/prisma':{prisma:usersDb},'@/lib/onedrive/security':{...security,assertOrigin:()=>{},requireSession:async()=>({accountId:'owner-account',email:'owner@example.test'})}});
+ const api=loadTypeScript('src/app/api/users/route.ts',{'@/lib/prisma':{prisma:usersDb}, '@/lib/personnel/clerk': {ensureEmployeeIdentity:async()=>{}},'@/lib/onedrive/security':{...security,assertOrigin:()=>{},requireSession:async()=>({accountId:'owner-account',email:'owner@example.test'})}});
  const submit=data=>api.POST(new Request('https://example.test/api/users',{method:'POST',body:JSON.stringify({name:user.name||'Personel A',email:user.email,role:'STAFF',employeeId:employee.id,...data})}));
  for(const data of [{role:'ADMIN',documentAccess:true},{employeeId:'',documentAccess:true},{employeeId:'unknown',documentAccess:true}]) assert.equal((await submit(data)).status,400);
  employee.active=false;
@@ -127,4 +127,24 @@ test('Only linked active STAFF profiles can receive explicit document access; pr
  assert.equal(records.length,0);
  assert.equal((await submit({documentAccess:true})).status,200);assert.equal(records.at(-1).accessState,'ACTIVE');
  assert.equal((await submit({})).status,200);assert.equal(records.at(-1).accessState,'PLANNED');
+});
+
+test('Staff logout works on the portal, preserves owner cookies and rejects foreign origins', async () => {
+ const deleted=[];
+ const api=loadTypeScript('src/app/api/personnel/logout/route.ts', {
+  'next/headers': {cookies:async()=>({delete:name=>deleted.push(name)})},
+  '@/lib/personnel/session': {employeeCookie:'vlc_employee_session'},
+  '@/lib/onedrive/security':security,
+ });
+ for (const origin of ['https://portal.vivalacrema.de','https://vivalacrema.vercel.app','http://localhost:3102']) {
+  const response=await api.POST(new Request(`${origin}/api/personnel/logout`, {method:'POST',headers:{origin}}));
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+ }
+ assert.deepEqual(deleted,Array(3).fill('vlc_employee_session'));
+ for (const origin of ['https://attacker.example','null','']) {
+  const response=await api.POST(new Request('https://portal.vivalacrema.de/api/personnel/logout', {method:'POST',headers:{origin}}));
+  assert.equal(response.status,403);
+ }
+ assert.equal(deleted.length,3);
 });

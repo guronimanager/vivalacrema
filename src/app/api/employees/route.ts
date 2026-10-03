@@ -17,14 +17,15 @@ export async function GET() {
     const employees = business
       ? await prisma.employee.findMany({
           where: { businessId: business.id },
+          include: { portalUser: { select: { email: true, role: true, accessState: true } } },
           orderBy: [{ active: "desc" }, { name: "asc" }],
         })
       : [];
     return Response.json({
       success: true,
-      records: employees.map((employee) => ({
-        ...employee,
-        salary: Number(employee.salary.toFixed(2)),
+      records: employees.map(({ portalUser, ...employee }) => ({
+        ...employee, salary: Number(employee.salary.toFixed(2)),
+        approvedEmail: employee.active && portalUser?.role === "STAFF" && portalUser.accessState === "ACTIVE" ? portalUser.email : null,
       })),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

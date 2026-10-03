@@ -72,7 +72,7 @@ export function UsersWorkspace() {
   return (
     <FinancePage
       title="Kullanıcılar"
-      description="Personeli Microsoft hesabına bağlayın ve kendi evraklarına erişimini yönetin."
+      description="Personelin onaylı e-posta adresini ve kendi evraklarına erişimini yönetin."
     >
       <p className="mb-5 text-sm text-zinc-400">
         Mevcut oturum: {currentEmail || "Microsoft bağlantısı gerekli"}. Satın
@@ -100,13 +100,13 @@ export function UsersWorkspace() {
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
           </Field>
-          <Field label="E-posta">
+          <Field label="Yönetici onaylı personel e-postası">
             <input
               className={inputClass}
               required
               type="email"
               value={draft.email}
-              onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, email: e.target.value, documentAccess: false })}
             />
           </Field>
           <Field label="Planlanan rol">
@@ -135,11 +135,11 @@ export function UsersWorkspace() {
               ))}
             </select>
           </Field>
-          <Field label="Kendi evraklarına giriş yetkisi">
+          <Field label="Evrak gönderimini ve personel girişini onaylıyorum">
             <input type="checkbox" checked={draft.documentAccess} disabled={draft.role !== "STAFF" || !draft.employeeId} onChange={e => setDraft({ ...draft, documentAccess: e.target.checked })} />
           </Field>
         </fieldset>
-        <p className="mt-4 text-sm text-zinc-400">Personelin kişisel Microsoft hesabındaki e-posta adresini girin. Erişim açıldığında /evraklarim üzerinden yalnızca kendisine bağlı belgeleri indirir. Yönetici rolü henüz ek giriş yetkisi vermez.</p>
+        <p className="mt-4 text-sm text-zinc-400">Personelin kullandığı e-posta adresini girin. Erişim açıldığında /evraklarim üzerinden yalnızca kendisine bağlı belgeleri indirir. Yönetici rolü henüz ek giriş yetkisi vermez.</p>
         <button className={`${buttonClass} mt-4`} disabled={busy}>
           Profili kaydet
         </button>

@@ -26,12 +26,15 @@ export function DocumentArchive({ connection, selectedEmployeeId }: { connection
   const [message, setMessage] = useState(connection === "success" ? "Kişisel OneDrive hesabınız bağlandı." : "");
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; name: string; approvedEmail?: string | null }[]>([]);
   const [employeeId, setEmployeeId] = useState(selectedEmployeeId || "");
   const [employeeFilter, setEmployeeFilter] = useState(selectedEmployeeId || "");
   const [kind, setKind] = useState<DocumentKind>(selectedEmployeeId ? "EMPLOYEE" : "INVOICE_MATERIAL");
+  const [notifyEmployee, setNotifyEmployee] = useState(true);
   const [entity, setEntity] = useState("");
   const [date, setDate] = useState(today);
+  const [archiveYear, setArchiveYear] = useState(() => today().slice(0, 4));
+  const [archiveMonth, setArchiveMonth] = useState(() => today().slice(5, 7));
   const [archiveFolder, setArchiveFolder] = useState<ArchiveFolder>(selectedEmployeeId ? "06_Briefe" : "02_Online_Rechnungen");
   const refresh = useCallback(async () => {
     const result = await loadArchive();
@@ -63,7 +66,7 @@ export function DocumentArchive({ connection, selectedEmployeeId }: { connection
     try {
       const employee = employees.find(value => value.id === employeeId);
       if (kind === "EMPLOYEE" && !employee) throw new Error("Belgenin ait olduğu personeli seçin.");
-      const metadata = { kind, entity: kind === "EMPLOYEE" ? employee!.name : entity, date, originalName: file.name, archiveFolder, ...(kind === "EMPLOYEE" ? { employeeId } : {}) };
+      const metadata = { kind, entity: kind === "EMPLOYEE" ? employee!.name : entity, date, originalName: file.name, archiveFolder, archivePeriod: `${archiveYear}-${archiveMonth}`, ...(kind === "EMPLOYEE" ? { employeeId, notifyEmployee } : {}) };
       const name = file.name.normalize("NFC").replace(/[^\p{L}\p{N} ._()\-]/gu, "-").replace(/\.\./g, "-").slice(-100);
       const pathname = `documents/files/${crypto.randomUUID()}/${name || "evrak"}`;
       const blob = await upload(pathname, file, { access: "private", handleUploadUrl: "/api/documents/upload", clientPayload: JSON.stringify(metadata), multipart: file.size > 5 * 1024 * 1024 });
@@ -72,6 +75,7 @@ export function DocumentArchive({ connection, selectedEmployeeId }: { connection
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Belge kaydı tamamlanamadı.");
       setMessage(data.document.syncStatus === "SYNCED" ? "Belge arşive kaydedildi ve OneDrive’a aktarıldı." : "Belge özel arşivde saklandı. OneDrive aktarımı için yeniden deneyebilirsiniz.");
+      if (data.document.emailMessage) setMessage(previous => `${previous} ${data.document.emailMessage}`);
       if (fileInput.current) fileInput.current.value = "";
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Yükleme tamamlanamadı."); }
@@ -86,6 +90,16 @@ export function DocumentArchive({ connection, selectedEmployeeId }: { connection
       setMessage(data.document.syncStatus === "SYNCED" ? "OneDrive aktarımı tamamlandı." : data.document.syncMessage);
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Aktarım tamamlanamadı."); }
+    finally { setBusy(false); }
+  }
+  async function emailDocument(id: string, recipient: string) {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/documents/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, recipient }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "E-posta gönderilemedi.");
+      setMessage(data.document.emailMessage || "Gönderim durumu kaydedildi."); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "E-posta gönderilemedi."); }
     finally { setBusy(false); }
   }
   async function assignEmployee(id: string, employeeId: string) {
@@ -120,18 +134,21 @@ export function DocumentArchive({ connection, selectedEmployeeId }: { connection
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Belge türü"><select className={inputClass} value={kind} onChange={event => { const next = event.target.value as DocumentKind; setKind(next); setArchiveFolder(defaultArchiveFolders[next]); }}>{Object.entries(documentKinds).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
           {kind === "EMPLOYEE" ? <Field label="Belgenin ait olduğu personel"><select required className={inputClass} value={employeeId} onChange={event => setEmployeeId(event.target.value)}><option value="">Personel seçin</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></Field> : <Field label="Tedarikçi / Banka / İlgili kurum"><input required maxLength={120} className={inputClass} value={entity} onChange={event => setEntity(event.target.value)} /></Field>}
+          {kind === "EMPLOYEE" ? <Field label="Yükleme sonrasında onaylı personele e-posta gönder"><input type="checkbox" checked={notifyEmployee} onChange={event => setNotifyEmployee(event.target.checked)} /><p className="mt-2 text-sm text-zinc-400">Alıcı: {employees.find(value => value.id === employeeId)?.approvedEmail || "Onaylı e-posta tanımlanmadı; Personel sayfasından kaydedin."}</p></Field> : null}
           <Field label="OneDrive alt klasörü"><select className={inputClass} value={archiveFolder} onChange={event => setArchiveFolder(event.target.value as ArchiveFolder)}>{archiveFolders.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></Field>
+          <Field label="Arşiv yılı"><input required type="number" min="1900" max="2199" className={inputClass} value={archiveYear} onChange={event => setArchiveYear(event.target.value)} /></Field>
+          <Field label="Arşiv ayı"><select required className={inputClass} value={archiveMonth} onChange={event => setArchiveMonth(event.target.value)}>{Array.from({ length: 12 }, (_, index) => { const month = String(index + 1).padStart(2, "0"); return <option key={month} value={month}>{month} · {new Intl.DateTimeFormat("tr-TR", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, index, 1)))}</option>; })}</select></Field>
           <Field label="Belge tarihi"><input required type="date" className={inputClass} value={date} onChange={event => setDate(event.target.value)} /></Field>
           <Field label="Dosya (en fazla 20 MB)"><input ref={fileInput} required type="file" accept=".pdf,.jpg,.jpeg,.png,.csv,.docx,.xlsx" className={inputClass} /></Field>
         </div>
-        <p className="mt-4 text-sm text-zinc-400">Belge tarihi hedef ayı belirler. Maaş bordroları için 05_Lohnabrechnungen, diğer personel evrakları için uygun alt klasörü seçin. Bu yükleme evrakı arşivler. Fatura tutarı, ödeme, tedarikçi ve stok kayıtları ayrıca işlenmelidir.</p>
+        <p className="mt-4 text-sm text-zinc-400">Belge tarihi ve arşiv dönemi ayrıdır. Seçtiğiniz yıl/ay hedef klasörü belirler; OneDrive’da mevcut yıl, ay ve belge klasörleri kullanılır. Maaş bordroları için 05_Lohnabrechnungen, diğer personel evrakları için uygun alt klasörü seçin. Bu yükleme evrakı arşivler. Fatura tutarı, ödeme, tedarikçi ve stok kayıtları ayrıca işlenmelidir.</p>
         <button type="submit" disabled={busy} className={`${buttonClass} mt-5`}>{busy ? "İşleniyor…" : "Yükle ve OneDrive’a aktar"}</button>
       </form>
       <div className={panelClass}>
         <div className="flex items-center justify-between gap-3"><h2 className="text-xl font-semibold">Arşivlenen evraklar</h2><button type="button" className="text-sm underline" disabled={busy} onClick={() => refresh().catch(reason => setError(reason.message))}>Yenile</button></div>
         <div className="mt-4"><Field label="Personel evraklarını filtrele"><select className={inputClass} value={employeeFilter} onChange={event => setEmployeeFilter(event.target.value)}><option value="">Tüm evraklar</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></Field></div>
         {documents.some(document => document.kind === "EMPLOYEE" && !document.employeeId) ? <p className="mt-4 text-sm text-amber-300">Eski personel evrakları kişi kaydına bağlı değilse personel girişinde görünmez. Mevcut belgeler otomatik olarak isimle eşleştirilmez.</p> : null}
-        {!documents.filter(document => !employeeFilter || document.employeeId === employeeFilter).length ? <p className="mt-5 text-zinc-400">Henüz evrak yüklenmedi.</p> : <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-zinc-400"><tr><th className="p-3">Belge</th><th className="p-3">Tür / İlgili</th><th className="p-3">OneDrive</th><th className="p-3">İşlem</th></tr></thead><tbody>{documents.filter(document => !employeeFilter || document.employeeId === employeeFilter).map(document => <tr key={document.id} className="border-t border-zinc-800"><td className="p-3"><p>{document.originalName}</p><p className="mt-1 text-xs text-zinc-400">{document.date} · {(document.size / 1024).toFixed(0)} KB</p></td><td className="p-3">{documentKinds[document.kind]}<p className="mt-1 text-zinc-400">{document.entity}</p></td><td className="max-w-sm p-3"><p className={document.syncStatus === "SYNCED" ? "text-emerald-400" : "text-amber-300"}>{document.syncStatus === "SYNCED" ? "Aktarıldı" : document.syncStatus === "PENDING" ? "Aktarım bekliyor" : "Aktarım başarısız"}</p><p className="mt-1 break-all text-xs text-zinc-500">{document.oneDrivePath}</p>{document.syncMessage ? <p className="mt-1 text-xs text-amber-300">{document.syncMessage}</p> : null}</td><td className="p-3"><a className="underline" href={`/api/documents/download?id=${document.id}`}>İndir</a>{document.kind === "EMPLOYEE" && !document.employeeId ? <Field label={`${document.originalName} için personeli bağla`}><select disabled={busy} value="" className={`${inputClass} mt-2`} onChange={event => void assignEmployee(document.id, event.target.value)}><option value="">Personeli bağla</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></Field> : null}{document.syncStatus !== "SYNCED" ? <button type="button" disabled={busy} className="ml-4 underline disabled:opacity-50" onClick={() => retry(document.id)}>Aktarımı yeniden dene</button> : null}</td></tr>)}</tbody></table></div>}
+        {!documents.filter(document => !employeeFilter || document.employeeId === employeeFilter).length ? <p className="mt-5 text-zinc-400">Henüz evrak yüklenmedi.</p> : <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-zinc-400"><tr><th className="p-3">Belge</th><th className="p-3">Tür / İlgili</th><th className="p-3">OneDrive</th><th className="p-3">E-posta</th><th className="p-3">İşlem</th></tr></thead><tbody>{documents.filter(document => !employeeFilter || document.employeeId === employeeFilter).map(document => <tr key={document.id} className="border-t border-zinc-800"><td className="p-3"><p>{document.originalName}</p><p className="mt-1 text-xs text-zinc-400">{document.date} · {(document.size / 1024).toFixed(0)} KB</p></td><td className="p-3">{documentKinds[document.kind]}<p className="mt-1 text-zinc-400">{document.entity}</p></td><td className="max-w-sm p-3"><p className={document.syncStatus === "SYNCED" ? "text-emerald-400" : "text-amber-300"}>{document.syncStatus === "SYNCED" ? "Aktarıldı" : document.syncStatus === "PENDING" ? "Aktarım bekliyor" : "Aktarım başarısız"}</p><p className="mt-1 break-all text-xs text-zinc-500">{document.oneDrivePath}</p>{document.syncMessage ? <p className="mt-1 text-xs text-amber-300">{document.syncMessage}</p> : null}</td><td className="p-3">{document.kind === "EMPLOYEE" ? <><p>{document.emailRecipient || employees.find(value => value.id === document.employeeId)?.approvedEmail || "Onaylı e-posta yok"}</p><p className="mt-2 text-xs text-zinc-400">{document.emailMessage || (document.emailStatus === "SENDING" ? "Gönderim sonucu bekleniyor; otomatik tekrar gönderilmez." : "E-posta gönderilmedi")}</p>{!["SENDING", "UNKNOWN", "ACCEPTED"].includes(document.emailStatus || "") && employees.find(value => value.id === document.employeeId)?.approvedEmail ? <button type="button" disabled={busy} className="mt-2 underline" onClick={() => emailDocument(document.id, employees.find(value => value.id === document.employeeId)!.approvedEmail!)}>Onaylı personele gönder</button> : null}{document.emailStatus === "FAILED" ? <a className="mt-2 block underline" href="/api/integrations/onedrive/start?mail=1&returnTo=%2Fevraklar">Microsoft e-posta iznini bağla</a> : null}</> : "—"}</td><td className="p-3"><a className="underline" href={`/api/documents/download?id=${document.id}`}>İndir</a>{document.kind === "EMPLOYEE" && !document.employeeId ? <Field label={`${document.originalName} için personeli bağla`}><select disabled={busy} value="" className={`${inputClass} mt-2`} onChange={event => void assignEmployee(document.id, event.target.value)}><option value="">Personeli bağla</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></Field> : null}{document.syncStatus !== "SYNCED" ? <button type="button" disabled={busy} className="ml-4 underline disabled:opacity-50" onClick={() => retry(document.id)}>Aktarımı yeniden dene</button> : null}</td></tr>)}</tbody></table></div>}
       </div>
     </> : null}
   </div>;

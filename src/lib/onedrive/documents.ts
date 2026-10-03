@@ -18,7 +18,7 @@ export async function readDocument(id: string, accountId: string) {
   if (document.accountId !== accountId) throw new ArchiveError("Bu belgeye erişim izni yok.", 403);
   return { document, etag: blob.blob.etag };
 }
-async function writeDocument(document: ArchiveDocument, etag?: string) {
+export async function writeDocument(document: ArchiveDocument, etag?: string) {
   await put(`${metadataPrefix}${document.id}.json`, JSON.stringify(document), { access: "private", addRandomSuffix: false, allowOverwrite: Boolean(etag), ...(etag ? { ifMatch: etag } : {}), contentType: "application/json", cacheControlMaxAge: 0 });
 }
 export async function finalizeDocument(pathname: string, metadata: DocumentMetadata, accountId: string) {
@@ -41,7 +41,7 @@ export async function finalizeDocument(pathname: string, metadata: DocumentMetad
   const id = hash.digest("hex");
   try { return sameDocumentAssignment((await readDocument(id, accountId)).document, metadata); }
   catch (error) { if (!(error instanceof ArchiveError) || error.status !== 404) throw error; }
-  const document: ArchiveDocument = { ...metadata, id, pathname, accountId, contentType: file.contentType, size: file.size, createdAt: new Date().toISOString(), oneDrivePath: oneDrivePath(metadata, id), syncStatus: "PENDING" };
+  const document: ArchiveDocument = { ...metadata, id, pathname, accountId, contentType: file.contentType, size: file.size, createdAt: new Date().toISOString(), oneDrivePath: oneDrivePath(metadata, id), syncStatus: "PENDING", ...(metadata.notifyEmployee ? { emailStatus: "NOT_SENT" as const } : {}) };
   try { await writeDocument(document); }
   catch (error) {
     // Concurrent completion callbacks must converge on the same content hash.

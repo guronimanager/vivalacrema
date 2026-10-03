@@ -9,11 +9,12 @@ export async function GET(request: Request) {
   try {
     const employee = new URL(request.url).searchParams.get("employee") === "1";
     const mail = !employee && new URL(request.url).searchParams.get("mail") === "1";
+    const returnTo = new URL(request.url).searchParams.get("returnTo") === "/evraklar" ? "/evraklar" : undefined;
     const state = randomBytes(32).toString("base64url");
     const verifier = randomBytes(32).toString("base64url");
     const redirectUri = process.env.ONEDRIVE_REDIRECT_URI!;
     const url = await msal().getAuthCodeUrl({ scopes: employee ? employeeScopes : mail ? [...scopes,...mailScopes] : scopes, redirectUri, state, codeChallenge: createHash("sha256").update(verifier).digest("base64url"), codeChallengeMethod: "S256", prompt: "select_account", loginHint: employee ? undefined : allowedEmail() });
-    (await cookies()).set(oauthCookie, seal({ state, verifier, mail, employee, expiresAt: Date.now() + 10 * 60 * 1000 }, "oauth"), cookieOptions(redirectUri, 600));
+    (await cookies()).set(oauthCookie, seal({ state, verifier, mail, employee, returnTo, expiresAt: Date.now() + 10 * 60 * 1000 }, "oauth"), cookieOptions(redirectUri, 600));
     const response = NextResponse.redirect(url);
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");

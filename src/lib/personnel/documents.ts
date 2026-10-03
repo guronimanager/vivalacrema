@@ -10,6 +10,11 @@ export async function employeeMetadata(input: unknown): Promise<DocumentMetadata
   const business = await prisma.business.findFirst({ select: { id: true } });
   const employee = business && await prisma.employee.findFirst({ where: { id: metadata.employeeId, businessId: business.id }, select: { name: true } });
   if (!employee) throw new ArchiveError("Personel kaydı bulunamadı.", 404);
+  if (metadata.notifyEmployee) {
+    const profile = await prisma.portalUser.findFirst({ where: { businessId: business!.id, employeeId: metadata.employeeId, role: "STAFF", accessState: "ACTIVE", employee: { active: true } }, select: { email: true } });
+    if (!profile) throw new ArchiveError("Personel için yönetici onaylı bir e-posta tanımlayın veya e-posta gönderimini kapatın.");
+    return { ...metadata, entity: employee.name, emailRecipient: profile.email };
+  }
   return { ...metadata, entity: employee.name };
 }
 export function sameDocumentAssignment(document: ArchiveDocument, metadata: DocumentMetadata) {

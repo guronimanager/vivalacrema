@@ -1,3 +1,4 @@
+import { ensureEmployeeIdentity } from "@/lib/personnel/clerk";
 import { prisma } from "@/lib/prisma";
 import { assertOrigin, requireSession } from "@/lib/onedrive/security";
 import { InputError, readInput, text, flag } from "@/lib/record-input";
@@ -58,11 +59,13 @@ async function save(request: Request, update: boolean) {
         }))
       )
         throw new InputError("Kullanıcı bulunamadı.");
+      if (enabled) await ensureEmployeeIdentity(email);
       return Response.json({
         success: true,
         record: await prisma.portalUser.update({ where: { id }, data }),
       });
     }
+    if (enabled) await ensureEmployeeIdentity(email);
     return Response.json({
       success: true,
       record: await prisma.portalUser.create({

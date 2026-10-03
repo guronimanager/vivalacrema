@@ -1,12 +1,15 @@
 "use client";
+import { useClerk } from "@clerk/nextjs";
+import { EmployeeEmailLogin } from "@/components/personnel/email-login";
 import { useEffect, useState } from "react";
 import { buttonClass, Notice, panelClass } from "@/components/finance/ui";
 import { dateLabel } from "@/lib/finance";
 interface EmployeeDocument { id: string; originalName: string; date: string; size: number }
 export function EmployeeArchive({ connection }: { connection?: string }) {
+  const clerk = useClerk();
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [name, setName] = useState("");
-  const [error, setError] = useState(connection === "failed" ? "Giriş tamamlanamadı. Yönetici, Microsoft e-postanızı personel kaydınıza bağlamalı ve evrak erişimini açmalıdır." : "");
+  const [error, setError] = useState(connection === "failed" ? "Giriş tamamlanamadı. Yönetici, e-posta adresinizi personel kaydınıza bağlamalı ve evrak erişimini açmalıdır." : "");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -22,8 +25,9 @@ export function EmployeeArchive({ connection }: { connection?: string }) {
   async function logout() {
     setBusy(true);
     try {
-      const response = await fetch("/api/integrations/onedrive/logout", { method: "POST" });
+      const response = await fetch("/api/personnel/logout", { method: "POST" });
       if (!response.ok) throw new Error("Çıkış yapılamadı.");
+      await clerk.signOut();
       setDocuments([]); setName(""); setError("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Çıkış yapılamadı."); }
     finally { setBusy(false); }
@@ -36,6 +40,6 @@ export function EmployeeArchive({ connection }: { connection?: string }) {
       <section className={panelClass} aria-label="Kendi personel evraklarım">
         {!documents.length ? <p>Henüz size atanmış evrak yok. Yöneticinizle iletişime geçin.</p> : <ul className="divide-y divide-zinc-800">{documents.map(document => <li key={document.id} className="flex flex-wrap items-center justify-between gap-4 py-4"><div><p>{document.originalName}</p><p className="mt-1 text-sm text-zinc-400">{dateLabel(document.date)} · {(document.size / 1024).toFixed(0)} KB</p></div><a className={buttonClass} href={`/api/personnel/documents?id=${encodeURIComponent(document.id)}`}>İndir</a></li>)}</ul>}
       </section>
-    </> : <section className={panelClass}><p className="mb-5 text-zinc-400">Yöneticinizin erişim verdiği kişisel Microsoft hesabını kullanın.</p><a className={`${buttonClass} inline-block`} href="/api/integrations/onedrive/start?employee=1">Microsoft hesabımla giriş yap</a></section>}
+    </> : <section className={panelClass}><p className="mb-5 text-zinc-400">Yöneticinizin onayladığı e-posta adresini kullanın. Microsoft hesabı gerekmez.</p><EmployeeEmailLogin /></section>}
   </main>;
 }

@@ -37,3 +37,9 @@ test("statement, payroll and receipts use the existing monthly folders", () => {
   assert.ok(oneDrivePath({ ...metadata, archiveFolder: "04_Quittungen", date: "2027-03-10" }, hash).startsWith("VLC UG 2027/2027.03_März/04_Quittungen/"));
   assert.throws(() => validateMetadata({ ...metadata, archiveFolder: "../../" }));
 });
+
+test("explicit archive month is independent from document date and rejects invalid destinations", () => {
+  assert.ok(oneDrivePath({ ...metadata, archivePeriod: "2025-12" }, hash).startsWith("VLC UG 2025/2025.12_Dezember/"));
+  assert.equal(validateMetadata({ ...metadata, archivePeriod: "2025-12" }).date, metadata.date);
+  for (const archivePeriod of ["2026-13", "2026-00", "2026-9", "../other", 2026]) assert.throws(() => validateMetadata({ ...metadata, archivePeriod }));
+});

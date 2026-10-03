@@ -18,9 +18,9 @@ export async function GET(request: Request) {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     if (!raw || !code || !state || url.searchParams.has("error")) throw new Error("OAuth callback rejected");
-    const expected = unseal<{ state: string; verifier: string; expiresAt: number; mail?: boolean; employee?: boolean }>(raw, "oauth");
+    const expected = unseal<{ state: string; verifier: string; expiresAt: number; mail?: boolean; employee?: boolean; returnTo?: string }>(raw, "oauth");
     if (expected.expiresAt < Date.now() || state.length !== expected.state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(expected.state))) throw new Error("OAuth state rejected");
-    if(expected.mail) target.pathname = "/satin-alma";
+    if(expected.mail) target.pathname = expected.returnTo === "/evraklar" ? "/evraklar" : "/satin-alma";
     if (expected.employee) {
       target.pathname = "/evraklarim";
       const employee = await finishEmployeeLogin(code, expected.verifier);

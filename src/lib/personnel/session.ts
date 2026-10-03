@@ -1,3 +1,4 @@
+import { clerkEmployee } from "./clerk";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { msal } from "@/lib/onedrive/connection";
@@ -19,12 +20,14 @@ export async function activeEmployeeUser(userId: string) {
   return { ...user, employee: user.employee };
 }
 export async function requireEmployeeSession() {
+  const verified = await clerkEmployee();
+  if (verified) return verified;
   const raw = (await cookies()).get(employeeCookie)?.value;
   let value: EmployeeSession;
   try {
     value = unseal<EmployeeSession>(raw || "", "employee-session");
     if (!value || !Number.isFinite(value.expiresAt) || value.expiresAt <= Date.now() || !value.userId || !value.accountId || !value.employeeId || !value.email || !value.version) throw new Error();
-  } catch { throw new ArchiveError("Kendi evraklarınıza erişmek için Microsoft hesabınızla giriş yapın.", 401); }
+  } catch { throw new ArchiveError("Kendi evraklarınıza erişmek için onaylı e-posta adresinizle giriş yapın.", 401); }
   const user = await activeEmployeeUser(value.userId);
   if (user.email !== value.email || user.employeeId !== value.employeeId || user.updatedAt.toISOString() !== value.version) throw new ArchiveError("Erişim bilgileriniz değişti. Yeniden giriş yapın.", 401);
   return { employeeId: user.employee.id, name: user.employee.name };
