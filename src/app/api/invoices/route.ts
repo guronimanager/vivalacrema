@@ -1,3 +1,4 @@
+import { validateMetadata } from "@/lib/document-format";
 import { prisma } from "@/lib/prisma";
 import { readInput } from "@/lib/record-input";
 import {
@@ -55,22 +56,20 @@ export async function POST(request: Request) {
     if (!["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(document.kind))
       throw new ArchiveError("Bir fatura belgesi seçin.");
     const confirmed = invoiceInput(body);
-    await updatePendingDocument(
-      document.id,
-      {
+    let metadata;
+    try {
+      metadata = validateMetadata({
         ...document,
-        ...(body.archiveFolder !== undefined
-          ? {
-              archiveFolder:
-                body.archiveFolder as import("@/lib/document-format").ArchiveFolder,
-            }
-          : {}),
-        kind: confirmed.kind as "INVOICE_SERVICE" | "INVOICE_MATERIAL",
+        ...(body.archiveFolder !== undefined ? { archiveFolder: body.archiveFolder } : {}),
+        ...(body.archivePeriod !== undefined ? { archivePeriod: body.archivePeriod } : {}),
+        kind: confirmed.kind,
         entity: confirmed.supplierName,
         date: confirmed.date.toISOString().slice(0, 10),
-      },
-      current.accountId,
-    );
+      });
+    } catch {
+      throw new ArchiveError("Belge tarihi ve arşiv dönemini/klasörünü kontrol edin.");
+    }
+    await updatePendingDocument(document.id, metadata, current.accountId);
     const invoice = await saveInvoice(body, current.accountId);
     let syncStatus: "PENDING" | "SYNCED" | "FAILED" = "PENDING";
     try {

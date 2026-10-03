@@ -11,6 +11,7 @@ import {
 import { today, money } from "@/lib/finance";
 import {
   archiveFolders,
+  validateMetadata,
   type ArchiveFolder,
   type ArchiveDocument,
 } from "@/lib/document-format";
@@ -106,6 +107,7 @@ export function InvoiceWorkspace({
   const [archiveFolder, setArchiveFolder] = useState<ArchiveFolder>(
     "02_Online_Rechnungen",
   );
+  const [archivePeriod, setArchivePeriod] = useState(() => today().slice(0, 7));
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [existingExpenses, setExistingExpenses] = useState<ExistingExpense[]>(
@@ -181,6 +183,8 @@ export function InvoiceWorkspace({
   }, []);
   function selectDocument(document: Document) {
     setDocumentId(document.id);
+    setArchivePeriod(document.archivePeriod || document.date.slice(0, 7));
+    setArchiveFolder(document.archiveFolder || "02_Online_Rechnungen");
     setDraft({
       ...emptyDraft(),
       date: document.date,
@@ -205,13 +209,14 @@ export function InvoiceWorkspace({
     setError("");
     setMessage("");
     try {
-      const metadata = {
+      const metadata = validateMetadata({
         kind: draft.kind,
         entity: draft.supplierName || "Fatura kontrolü bekliyor",
         date: draft.date || today(),
         originalName: file.name,
         archiveFolder,
-      };
+        archivePeriod,
+      });
       const name =
         file.name
           .normalize("NFC")
@@ -253,7 +258,9 @@ export function InvoiceWorkspace({
     setBusy(true);
     setError("");
     try {
-      const data = await api("/api/documents/import", { url });
+      const data = await api("/api/documents/import", {
+        url, archiveFolder, archivePeriod, kind: draft.kind, date: draft.date || today(),
+      });
       setDocuments((items) => [
         data.document,
         ...items.filter((item) => item.id !== data.document.id),
@@ -313,6 +320,7 @@ export function InvoiceWorkspace({
         ...draft,
         documentId,
         archiveFolder,
+        archivePeriod,
       });
       setMessage(
         result.syncStatus === "SYNCED"
@@ -433,6 +441,13 @@ export function InvoiceWorkspace({
                   }}
                 />
               </Field>
+              <label className="block text-sm text-zinc-400">
+                Arşiv yılı ve ayı
+                <input type="month" min="1900-01" max="2199-12" required
+                  className={inputClass} value={archivePeriod} disabled={busy}
+                  onChange={(event) => setArchivePeriod(event.target.value)} />
+                <span className="mt-2 block">Belge tarihinden bağımsızdır. Yeni ve aktarım bekleyen belgeler bu döneme yerleştirilir; daha önce aktarılan belgeler taşınmaz.</span>
+              </label>
               <Field label="OneDrive alt klasörü">
                 <select
                   className={inputClass}
