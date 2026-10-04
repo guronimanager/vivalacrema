@@ -1,7 +1,7 @@
 import { employeeMetadata, sameDocumentAssignment } from "@/lib/personnel/documents";
 import { createHash } from "node:crypto";
 import { BlobPreconditionFailedError, get, head, list, put } from "@vercel/blob";
-import { type ArchiveDocument, type DocumentMetadata, contentTypes, maximumFileSize, oneDrivePath } from "@/lib/document-format";
+import { type ArchiveDocument, type DocumentMetadata, contentTypes, maximumFileSize, oneDrivePath, defaultArchiveFolders } from "@/lib/document-format";
 import { accessToken } from "./connection";
 import { resolveArchiveFolder } from "./folder";
 import { ArchiveError } from "./security";
@@ -41,6 +41,9 @@ export async function finalizeDocument(pathname: string, metadata: DocumentMetad
   const id = hash.digest("hex");
   try { return sameDocumentAssignment((await readDocument(id, accountId)).document, metadata); }
   catch (error) { if (!(error instanceof ArchiveError) || error.status !== 404) throw error; }
+  const { findRemoteDuplicate } = await import("./inventory");
+  const remote = await findRemoteDuplicate(accountId, metadata.archivePeriod || metadata.date.slice(0, 7), metadata.archiveFolder || defaultArchiveFolders[metadata.kind], id, bytes);
+  if (remote) return sameDocumentAssignment(remote, metadata);
   const document: ArchiveDocument = { ...metadata, id, pathname, accountId, contentType: file.contentType, size: file.size, createdAt: new Date().toISOString(), oneDrivePath: oneDrivePath(metadata, id), syncStatus: "PENDING", ...(metadata.notifyEmployee ? { emailStatus: "NOT_SENT" as const } : {}) };
   try { await writeDocument(document); }
   catch (error) {
@@ -117,10 +120,12 @@ export async function syncDocument(id: string, accountId: string) {
 export async function updatePendingDocument(id: string, metadata: DocumentMetadata, accountId: string) {
   const { document, etag } = await readDocument(id, accountId);
   // Previously synced originals stay where the user archived them.
-  if (document.syncStatus === "SYNCED") return document;
+  if (document.syncStatus === "SYNCED" && document.source !== "ONEDRIVE") return document;
   const valid = await employeeMetadata(metadata);
   sameDocumentAssignment(document, valid);
-  const updated = { ...document, ...valid, oneDrivePath: oneDrivePath(valid, id), syncStatus: "PENDING" as const, syncMessage: undefined };
+  const updated = document.syncStatus === "SYNCED"
+    ? { ...document, ...valid, dateNeedsReview: false }
+    : { ...document, ...valid, oneDrivePath: oneDrivePath(valid, id), syncStatus: "PENDING" as const, syncMessage: undefined };
   await writeDocument(updated, etag);
   return updated;
 }

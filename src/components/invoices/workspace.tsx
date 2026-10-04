@@ -1,4 +1,5 @@
 "use client";
+import { checkExistingDocument } from "@/lib/document-check";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { upload } from "@vercel/blob/client";
 import {
@@ -130,6 +131,7 @@ export function InvoiceWorkspace({
   });
   const paymentRequest = useRef<string | null>(null);
   const [filter, setFilter] = useState("OPEN");
+  const existingInvoice = invoices.find(invoice => invoice.documentId === documentId);
   async function refreshLedger() {
     try {
       const [ledger, bank] = await Promise.all([
@@ -160,6 +162,9 @@ export function InvoiceWorkspace({
                 ["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(d.kind),
               ),
             );
+          const requestedId = new URLSearchParams(window.location.search).get("document");
+          const requested = data.documents.find((d: Document) => d.id === requestedId && ["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(d.kind));
+          if (requested) selectDocument(requested);
           const results = await Promise.allSettled([
             api("/api/invoices"),
             api("/api/invoices/payments"),
@@ -187,12 +192,12 @@ export function InvoiceWorkspace({
     setArchiveFolder(document.archiveFolder || "02_Online_Rechnungen");
     setDraft({
       ...emptyDraft(),
-      date: document.date,
+      date: document.dateNeedsReview ? "" : document.date,
       supplierName:
         document.entity === "Fatura kontrolü bekliyor" ? "" : document.entity,
       kind: document.kind,
     });
-    setWarnings([]);
+    setWarnings(document.dateNeedsReview ? ["OneDrive’dan tanınan bu belgenin gerçek tarihini OCR ile veya elle doğrulayın. Arşiv ayı belge tarihi değildir."] : []);
   }
   async function uploadFile(file?: File) {
     if (!file) return;
@@ -209,6 +214,14 @@ export function InvoiceWorkspace({
     setError("");
     setMessage("");
     try {
+      const existing = await checkExistingDocument(file, archivePeriod, archiveFolder);
+      if (existing.duplicate) {
+        if (!["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(existing.document.kind)) throw new Error("Bu dosya arşivde başka belge türünde mevcut. Evrak Arşivi’nden kaydı kontrol edin.");
+        setDocuments(items => [existing.document, ...items.filter(item => item.id !== existing.document.id)]);
+        selectDocument(existing.document);
+        setMessage("Bu evrak zaten mevcut; yeniden yüklenmedi. Mevcut belgeyle fatura ve ödeme kontrolüne devam edin.");
+        return;
+      }
       const metadata = validateMetadata({
         kind: draft.kind,
         entity: draft.supplierName || "Fatura kontrolü bekliyor",
@@ -527,7 +540,7 @@ export function InvoiceWorkspace({
               </a>
             ) : null}
           </div>
-          {documentId ? (
+          {existingInvoice ? <div className={panelClass}><h3 className="text-lg font-semibold">Bu fatura zaten kayıtlı</h3><p className="mt-3">{existingInvoice.supplierName} · {existingInvoice.invoiceNumber}</p><p className="mt-2">Fatura: {money(existingInvoice.totalAmount)} · Ödenen: {money(existingInvoice.paidAmount)} · Açık borç: {money(existingInvoice.outstandingAmount)}</p><p className="mt-3 text-sm text-zinc-400">İkinci gider oluşturmayın. Mevcut banka hareketini aşağıdaki ödeme bölümünden veya Banka & Kasa’dan bu faturayla eşleştirin.</p><button type="button" className={`${buttonClass} mt-3`} onClick={() => {setSelectedInvoice(existingInvoice.id);setFilter("ALL");}}>Ödeme bölümünde bu faturayı seç</button><a className="ml-4 underline" href="/banka-kasa">Banka hareketleriyle eşleştir</a></div> : documentId ? (
             <form className={panelClass} onSubmit={save}>
               <h3 className="text-lg font-semibold">
                 2. Bilgileri kontrol et ve faturayı kaydet

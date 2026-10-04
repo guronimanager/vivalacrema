@@ -104,7 +104,7 @@ test('Upload completion preserves employee binding, deduplicates and refuses cro
   put:async(key,text,options)=>{if(store.has(key)&&!options.allowOverwrite)throw new Error('Already exists');writes++;store.set(key,text);},
   list:async()=>({blobs:[...store.keys()].map(pathname=>({pathname})),hasMore:false}),
  };
- const api=loadTypeScript('src/lib/onedrive/documents.ts',{'@vercel/blob':blobs,'@/lib/prisma':{prisma:{...db,employee:{findFirst:async({where})=>({...employee,id:where.id})}}},'@/lib/onedrive/security':security,'./security':security,'./connection':{},'./folder':{}});
+ const api=loadTypeScript('src/lib/onedrive/documents.ts',{'@vercel/blob':blobs,'@/lib/prisma':{prisma:{...db,employee:{findFirst:async({where})=>({...employee,id:where.id})}}},'@/lib/onedrive/security':security,'./security':security,'./connection':{},'./folder':{},'./inventory':{findRemoteDuplicate:async()=>null}});
  const saved=await api.finalizeDocument(pathname,metadata,'owner-account');
  assert.equal(saved.employeeId,employee.id);assert.equal(saved.entity,employee.name);assert.equal(writes,1);
  assert.deepEqual(await api.finalizeDocument(pathname,metadata,'owner-account'),saved);assert.equal(writes,1);

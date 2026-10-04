@@ -17,6 +17,7 @@ export interface ArchiveDocument extends DocumentMetadata {
   id: string; pathname: string; contentType: string; size: number; createdAt: string;
   accountId: string; oneDrivePath: string; syncStatus: "PENDING" | "SYNCED" | "FAILED";
   emailStatus?: "NOT_SENT" | "SENDING" | "ACCEPTED" | "FAILED" | "UNKNOWN"; emailSentAt?: string; emailMessage?: string;
+  source?: "ONEDRIVE"; dateNeedsReview?: boolean;
   oneDriveItemId?: string; syncedAt?: string; syncMessage?: string;
 }
 export const maximumFileSize = 20 * 1024 * 1024;
