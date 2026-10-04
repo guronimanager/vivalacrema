@@ -267,7 +267,7 @@ export function StatementWorkspace({
       });
       setImported(result.transactions);
       setMessage(
-        `${result.transactions.filter((r: { created: boolean }) => r.created).length} yeni hareket kaydedildi; mevcut hareketler tekrar eklenmedi. Fatura ödemeleri için aşağıdaki eşleştirmeleri ayrıca onaylayın.`,
+        `${result.transactions.filter((r: { created: boolean }) => r.created).length} yeni hareket kaydedildi; mevcut hareketler tekrar eklenmedi. Fatura eşleştirmelerini şimdi veya Kayıtlı hareketleri faturayla eşleştir bölümünden daha sonra tamamlayabilirsiniz.`,
       );
       await onSaved();
     } catch (reason) {
@@ -635,8 +635,10 @@ export function StatementWorkspace({
                       checked={reviewed}
                       onChange={(e) => setReviewed(e.target.checked)}
                     />{" "}
-                    Ekstrenin bütün hareketlerini, tutarlarını, yönlerini ve
-                    mevcut kayıt seçimlerini kontrol ettim; bütün tutarlar EUR.
+                    Fatura seçimi zorunlu değildir; sonradan
+                    eşleştirebilirsiniz. Ekstrenin bütün hareketlerini,
+                    tutarlarını, yönlerini ve mevcut kayıt seçimlerini kontrol
+                    ettim; bütün tutarlar EUR.
                   </label>
                   <button
                     type="button"

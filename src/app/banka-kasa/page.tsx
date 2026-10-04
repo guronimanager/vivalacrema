@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { StatementReconciliation } from "@/components/statements/reconciliation";
 import { StatementWorkspace } from "@/components/statements/workspace";
 
 type BankAccount = {
@@ -36,6 +37,7 @@ function today() {
 }
 
 export default function BankCashPage() {
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [month, setMonth] = useState(today().slice(0, 7));
@@ -94,6 +96,7 @@ export default function BankCashPage() {
           setLoadError("");
           setAccounts(accountResult.accounts);
           setTransactions(transactionResult.transactions);
+          setRefreshVersion((v) => v + 1);
           setTransactionAccountId(
             (current) => current || accountResult.accounts[0]?.id || "",
           );
@@ -317,6 +320,13 @@ export default function BankCashPage() {
         </p>
 
         <StatementWorkspace accounts={accounts} onSaved={refreshAll} />
+        <StatementReconciliation
+          key={`${month}:${filterAccount}`}
+          month={month}
+          account={filterAccount}
+          refreshVersion={refreshVersion}
+          onSaved={refreshAll}
+        />
 
         <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
