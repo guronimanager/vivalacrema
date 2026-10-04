@@ -195,8 +195,7 @@ export function OneDriveInventory({
         bilgilerini doğrulayın. Kaydedilmiş faturayı Banka & Kasa’daki mevcut
         hareketle eşleştirin; yeni ödeme veya gideri tekrar oluşturmayın.
         Personel evrakları, yönetici ilgili personele bağlayana kadar personele
-        açılmaz. Tarama yalnızca seçilen klasörün doğrudan içindeki dosyaları
-        listeler.
+        açılmaz. Alt klasörleri açarak içlerindeki evrakları da tanıtabilirsiniz.
       </p>
       {scanned && !files.length ? (
         <p className="mt-4">Bu sayfada dosya bulunamadı.</p>

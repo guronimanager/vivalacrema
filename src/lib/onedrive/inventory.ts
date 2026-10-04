@@ -281,7 +281,6 @@ export async function registerRemoteDocument(
         ? "EMPLOYEE"
         : [
               "02_Online_Rechnungen",
-              "03_Online_Portal",
               "04_Quittungen",
               "08_Abgestimmt",
             ].includes(selected.folder)

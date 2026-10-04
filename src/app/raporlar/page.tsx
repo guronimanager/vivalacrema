@@ -1,4 +1,5 @@
 "use client";
+import { ArchiveAuditReport } from "@/components/reports/archive-audit";
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -278,6 +279,7 @@ export default function ReportsPage() {
           </div>
         </>
       )}
+      <ArchiveAuditReport />
     </FinancePage>
   );
 }
