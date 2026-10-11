@@ -14,7 +14,7 @@ export const modules = {
 } as const;
 export type Module = keyof typeof modules;
 export type Permissions = Partial<Record<Module, "READ" | "WRITE">>;
-export type Role = "ADMIN" | "ACCOUNTANT" | "STAFF";
+export type Role = "ADMIN" | "ACCOUNTANT" | "STAFF" | "PARTNER";
 export function validPermissions(value: unknown): Permissions {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Sayfa yetkilerini kontrol edin.");
@@ -28,6 +28,7 @@ export function validPermissions(value: unknown): Permissions {
   return value as Permissions;
 }
 export function defaults(role: string): Permissions {
+  if (role === "PARTNER") return Object.fromEntries(Object.keys(modules).map(key => [key, "READ"])) as Permissions;
   return role === "ACCOUNTANT"
     ? {
         dashboard: "READ",
@@ -46,6 +47,8 @@ export function canAccess(
   write = false,
 ) {
   if (user.role === "ADMIN") return true;
+  // Partner access is fixed; stored grants can never elevate it.
+  if (user.role === "PARTNER") return !write;
   if (!["STAFF", "ACCOUNTANT"].includes(user.role) || module === "users")
     return false;
   let permissions: Permissions;

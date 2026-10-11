@@ -214,7 +214,7 @@ export default function SalesPage() {
         </div>
       </div>
       <div className="grid gap-6 xl:grid-cols-3">
-        <form onSubmit={submit} className={panelClass}>
+        <form data-portal-mutation onSubmit={submit} className={panelClass}>
           <h2 className="mb-5 text-xl font-semibold">Manuel Satış Ekle</h2>
           <div className="space-y-4">
             <Field label="Tarih">

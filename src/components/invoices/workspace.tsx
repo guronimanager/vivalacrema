@@ -426,7 +426,7 @@ export function InvoiceWorkspace({
       <Notice error={error} message={message} />
       {connected ? (
         <>
-          <div className={panelClass}>
+          <div data-portal-mutation className={panelClass}>
             <h3 className="text-lg font-semibold">1. Belgeyi ekle</h3>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field label="Telefondan fotoğraf çek / tara">
@@ -541,7 +541,7 @@ export function InvoiceWorkspace({
             ) : null}
           </div>
           {existingInvoice ? <div className={panelClass}><h3 className="text-lg font-semibold">Bu fatura zaten kayıtlı</h3><p className="mt-3">{existingInvoice.supplierName} · {existingInvoice.invoiceNumber}</p><p className="mt-2">Fatura: {money(existingInvoice.totalAmount)} · Ödenen: {money(existingInvoice.paidAmount)} · Açık borç: {money(existingInvoice.outstandingAmount)}</p><p className="mt-3 text-sm text-zinc-400">İkinci gider oluşturmayın. Mevcut banka hareketini aşağıdaki ödeme bölümünden veya Banka & Kasa’dan bu faturayla eşleştirin.</p><button type="button" className={`${buttonClass} mt-3`} onClick={() => {setSelectedInvoice(existingInvoice.id);setFilter("ALL");}}>Ödeme bölümünde bu faturayı seç</button><a className="ml-4 underline" href="/banka-kasa">Banka hareketleriyle eşleştir</a></div> : documentId ? (
-            <form className={panelClass} onSubmit={save}>
+            <form data-portal-mutation className={panelClass} onSubmit={save}>
               <h3 className="text-lg font-semibold">
                 2. Bilgileri kontrol et ve faturayı kaydet
               </h3>
@@ -771,7 +771,7 @@ export function InvoiceWorkspace({
               </table>
             </div>
           </div>
-          <form className={panelClass} onSubmit={savePayment}>
+          <form data-portal-mutation className={panelClass} onSubmit={savePayment}>
             <h3 className="text-lg font-semibold">
               Ödeme ekle / banka hareketiyle eşleştir
             </h3>

@@ -260,7 +260,7 @@ export default function ExpensesPage() {
         </p>
 
         <div className="grid gap-6 xl:grid-cols-3">
-          <form
+          <form data-portal-mutation
             onSubmit={submitExpense}
             className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
           >

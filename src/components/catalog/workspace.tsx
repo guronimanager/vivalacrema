@@ -196,7 +196,7 @@ export function CatalogWorkspace() {
       description="Tedarikçilere bağlı Viva La Crema ürün kataloğu. Kodlar kalıcıdır; ileride satış ve reçete takibinde aynı ürün kimliği kullanılacaktır."
     >
       <Notice error={error} message={message} />
-      <form
+      <form data-portal-mutation
         className={panelClass}
         onSubmit={(e) => {
           e.preventDefault();
@@ -315,7 +315,7 @@ export function CatalogWorkspace() {
           Kaydet
         </button>
         {draft.id ? (
-          <button
+          <button data-portal-mutation
             type="button"
             className="ml-4 underline"
             onClick={() => setDraft(blank())}
@@ -324,7 +324,7 @@ export function CatalogWorkspace() {
           </button>
         ) : null}
       </form>
-      <section className={`${panelClass} mt-6`}>
+      <section data-portal-mutation className={`${panelClass} mt-6`}>
         <h2 className="text-xl font-semibold">
           Faturadaki ürünleri kataloğa aktar
         </h2>
@@ -383,7 +383,7 @@ export function CatalogWorkspace() {
                     onChange={(e) => setTaxNumber(e.target.value)}
                   />
                 </Field>
-                <button
+                <button data-portal-mutation
                   className={buttonClass}
                   disabled={busy || !supplierName}
                   onClick={() => void saveSupplier()}
@@ -524,7 +524,7 @@ export function CatalogWorkspace() {
               Ürün satırlarını, miktarları, birimleri ve net EUR fiyatlarını
               kontrol ettim.
             </label>
-            <button
+            <button data-portal-mutation
               className={buttonClass}
               disabled={busy || !reviewed || !importSupplier || !documentDate}
               onClick={() => void importItems()}
@@ -633,7 +633,7 @@ export function CatalogWorkspace() {
                     ))}
                   </td>
                   <td className="p-3">
-                    <button
+                    <button data-portal-mutation
                       className="underline"
                       onClick={() =>
                         setDraft({

@@ -189,7 +189,7 @@ export function RecordManager({
         </div>
       )}
       <div className="grid gap-6 xl:grid-cols-3">
-        <form onSubmit={submit} className={panelClass}>
+        <form data-portal-mutation onSubmit={submit} className={panelClass}>
           <h2 className="mb-5 text-xl font-semibold">
             {editing ? "Kaydı Düzenle" : "Yeni Kayıt"}
           </h2>
@@ -293,7 +293,7 @@ export function RecordManager({
                         </td>
                       ))}
                       <td className="px-3 py-4">
-                        <button
+                        <button data-portal-mutation
                           type="button"
                           disabled={saving}
                           onClick={() => edit(record)}

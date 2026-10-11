@@ -55,7 +55,7 @@ export function EmployeeLoginAccess({ employees }: { employees: Employee[] }) {
     <p className="mt-3 text-sm text-zinc-400">Her personele bir giriş e-postası tanımlayın. Yönetici onayı kapalıysa giriş yapılamaz. E-posta değiştiğinde onayınızı yeniden seçin.</p>
     <Notice error={error} message={message} />
     <button type="button" className="my-4 text-sm underline" disabled={busy || loading} onClick={() => { setLoading(true); setVersion(value => value + 1); setEmployeeId(""); setEmail(""); setApproved(false); }}>Giriş e-postalarını yenile</button>
-    <form onSubmit={save}>
+    <form data-portal-mutation onSubmit={save}>
       <fieldset disabled={loading || busy} className="grid gap-4 md:grid-cols-2">
         <Field label="Personel"><select required className={inputClass} value={employeeId} onChange={event => selectEmployee(event.target.value)}><option value="">Personel seçin</option>{employees.map(value => <option key={value.id} value={value.id}>{value.name}{value.active ? "" : " (Pasif)"}</option>)}</select></Field>
         <Field label="Yönetici onaylı personel e-postası"><input type="email" required maxLength={254} autoComplete="off" disabled={!employee || managementProfile} className={inputClass} value={email} onChange={event => { setEmail(event.target.value); setApproved(false); }} /></Field>
@@ -68,7 +68,7 @@ export function EmployeeLoginAccess({ employees }: { employees: Employee[] }) {
     <div className="mt-6 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-3">Personel</th><th className="p-3">Giriş e-postası</th><th className="p-3">Yönetici onayı</th><th className="p-3">İşlem</th></tr></thead><tbody>{!loading && !error && employees.map(value => {
       const current = profiles.find(p => p.employeeId === value.id);
       const enabled = value.active && current?.role === "STAFF" && current.accessState === "ACTIVE";
-      return <tr key={value.id} className="border-t border-zinc-800"><td className="p-3">{value.name}</td><td className="p-3">{current?.email || "Tanımlanmadı"}</td><td className="p-3">{enabled ? "Onaylı" : "Giriş kapalı"}</td><td className="p-3"><button type="button" className="underline" disabled={busy} onClick={() => selectEmployee(value.id)}>E-posta / Onay düzenle</button></td></tr>;
+      return <tr key={value.id} className="border-t border-zinc-800"><td className="p-3">{value.name}</td><td className="p-3">{current?.email || "Tanımlanmadı"}</td><td className="p-3">{enabled ? "Onaylı" : "Giriş kapalı"}</td><td className="p-3"><button data-portal-mutation type="button" className="underline" disabled={busy} onClick={() => selectEmployee(value.id)}>E-posta / Onay düzenle</button></td></tr>;
     })}</tbody></table></div>
     <Link className="mt-4 inline-block underline" href="/evraklarim">Personel giriş ekranı</Link>
   </section>;

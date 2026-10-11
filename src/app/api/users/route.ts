@@ -8,7 +8,7 @@ import { invoiceFailure } from "@/lib/invoices/errors";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
-    const current = await requirePortal("users", true);
+    const current = await requirePortal("users");
     const business = await prisma.business.findFirst();
     const records = business
       ? await prisma.portalUser.findMany({
@@ -37,7 +37,7 @@ async function save(request: Request, update: boolean) {
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       name.length > 120 ||
-      !["ADMIN", "ACCOUNTANT", "STAFF"].includes(role)
+      !["ADMIN", "ACCOUNTANT", "STAFF", "PARTNER"].includes(role)
     )
       throw new InputError("Ad, e-posta ve rolü kontrol edin.");
     const business = await prisma.business.findFirst();
@@ -57,7 +57,11 @@ async function save(request: Request, update: boolean) {
     let permissions;
     try { permissions = body.permissions === undefined ? undefined : validPermissions(body.permissions); }
     catch { throw new InputError("Sayfa yetkilerini kontrol edin."); }
-    if (role !== "ADMIN" && permissions?.users) throw new InputError("Kullanıcı yönetimi yalnızca yöneticilere verilebilir.");
+    if (role === "PARTNER") {
+      if (permissions && Object.values(permissions).some(level => level === "WRITE")) throw new InputError("Ortak rolüne düzenleme yetkisi verilemez.");
+      permissions = defaults("PARTNER");
+    }
+    if (role !== "ADMIN" && role !== "PARTNER" && permissions?.users) throw new InputError("Kullanıcı yönetimi yalnızca yöneticilere verilebilir.");
     const data = { name, email, role, employeeId, accessState: enabled ? "ACTIVE" : "PLANNED", ...(permissions ? { permissions } : {}) };
     if (update) {
       const id = text(body, "id", true);

@@ -138,7 +138,7 @@ export function OneDriveInventory({
     }
   }
   return (
-    <section className={panelClass}>
+    <section data-portal-mutation className={panelClass}>
       <h2 className="text-xl font-semibold">
         OneDrive’daki mevcut evrakları tara
       </h2>
@@ -250,7 +250,7 @@ export function OneDriveInventory({
             </div>
             <div>
               {!results[file.id] ? (
-                <button
+                <button data-portal-mutation
                   type="button"
                   className={buttonClass}
                   disabled={busy || !file.supported}

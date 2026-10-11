@@ -315,7 +315,7 @@ export function StatementWorkspace({
     }
   }
   return (
-    <section className={`${panelClass} mb-6`}>
+    <section data-portal-mutation className={`${panelClass} mb-6`}>
       <h2 className="text-xl font-semibold">
         Banka ekstresi ve fatura eşleştirme
       </h2>
@@ -332,7 +332,7 @@ export function StatementWorkspace({
       <Notice error={error} message={message} />
       <p className="mb-4 text-sm text-zinc-400">
         Yükleme için{" "}
-        <a className="underline" href="/api/integrations/onedrive/start">
+        <a data-portal-mutation className="underline" href="/api/integrations/onedrive/start">
           kişisel Microsoft hesabınızla bağlantı
         </a>{" "}
         gerekir.
@@ -609,7 +609,7 @@ export function StatementWorkspace({
                                 ))}
                               </select>
                               {imported[index] ? (
-                                <button
+                                <button data-portal-mutation
                                   type="button"
                                   className="mt-2 underline"
                                   disabled={busy || !invoiceChoices[index]}

@@ -113,7 +113,7 @@ export function SuppliersWorkspace() {
       </p>
       <Notice error={error} message={message} />
       <InvoiceIntake onRead={read} />
-      <form
+      <form data-portal-mutation
         className={panelClass}
         onSubmit={(e) => {
           e.preventDefault();
@@ -157,7 +157,7 @@ export function SuppliersWorkspace() {
         <button disabled={busy} className={`${buttonClass} mt-4`}>
           Kaydet
         </button>
-        <button
+        <button data-portal-mutation
           type="button"
           className="ml-4 underline"
           onClick={() => setDraft(blank())}
@@ -210,7 +210,7 @@ export function SuppliersWorkspace() {
                   ))}
                 </td>
                 <td className="p-3">
-                  <button
+                  <button data-portal-mutation
                     className="underline"
                     onClick={() =>
                       setDraft({

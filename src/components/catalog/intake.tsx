@@ -101,12 +101,12 @@ export function InvoiceIntake({
     }
   }
   return (
-    <div className="my-5 rounded-xl border border-zinc-700 p-4">
+    <div data-portal-mutation className="my-5 rounded-xl border border-zinc-700 p-4">
       <h3 className="mb-3 font-semibold">Fatura yükle / OCR ile oku</h3>
       <p className="mb-3 text-sm text-zinc-400">
         Belgeyi okumak tedarikçi, gider veya stok kaydı oluşturmaz. Alanları
         kontrol ederek aşağıda kaydedin.{" "}
-        <a className="underline" href="/api/integrations/onedrive/start">
+        <a data-portal-mutation className="underline" href="/api/integrations/onedrive/start">
           Microsoft hesabımla bağlan
         </a>
       </p>

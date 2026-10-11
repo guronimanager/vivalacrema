@@ -208,7 +208,7 @@ export function StatementReconciliation({
                           </option>
                         ))}
                       </select>
-                      <button
+                      <button data-portal-mutation
                         type="button"
                         className="mt-2 underline"
                         disabled={busy || loading || !choices[row.id]}

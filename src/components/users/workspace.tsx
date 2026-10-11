@@ -38,6 +38,7 @@ const roles: Record<string, string> = {
   ADMIN: "Yönetici",
   ACCOUNTANT: "Muhasebe",
   STAFF: "Personel",
+  PARTNER: "Ortak (yalnızca görüntüleme)",
 };
 export function UsersWorkspace() {
   const [records, setRecords] = useState<User[]>([]),
@@ -100,7 +101,7 @@ export function UsersWorkspace() {
         </a>
       </p>
       <Notice error={error} message={message} />
-      <form
+      <form data-portal-mutation
         className={panelClass}
         onSubmit={(e) => {
           e.preventDefault();
@@ -193,7 +194,9 @@ export function UsersWorkspace() {
           verilebilir.
         </p>
         <h3 className="font-semibold">Sayfa yetkileri</h3>
-        {draft.role === "ADMIN" ? (
+        {draft.role === "PARTNER" ? (
+          <p className="mt-3 text-sm text-zinc-400">Ortak tüm sayfaları yalnızca görüntüler. Kayıt ekleyemez, düzenleyemez, silemez veya gönderim yapamaz. Bu rolün yetkileri değiştirilemez.</p>
+        ) : draft.role === "ADMIN" ? (
           <p className="mt-3 text-sm text-zinc-400">
             Yönetici tüm sayfalara ve kullanıcı yönetimine erişir.
           </p>
@@ -232,7 +235,7 @@ export function UsersWorkspace() {
         <button className={`${buttonClass} mt-4`} disabled={busy}>
           Kullanıcıyı ve yetkileri kaydet
         </button>
-        <button
+        <button data-portal-mutation
           type="button"
           className="ml-4 underline"
           disabled={busy}
@@ -269,7 +272,7 @@ export function UsersWorkspace() {
                   {u.accessState === "ACTIVE" ? "Giriş açık" : "Giriş kapalı"}
                 </p>
               </div>
-              <button
+              <button data-portal-mutation
                 className="underline"
                 disabled={busy}
                 onClick={() => {

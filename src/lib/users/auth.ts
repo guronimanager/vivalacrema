@@ -45,7 +45,7 @@ export async function portalIdentity(proxy?: {
       }));
     if (
       !profile ||
-      !["ADMIN", "ACCOUNTANT", "STAFF"].includes(profile.role) ||
+      !["ADMIN", "ACCOUNTANT", "STAFF", "PARTNER"].includes(profile.role) ||
       (profile.role === "STAFF" &&
         (!profile.employee?.active ||
           profile.employee.businessId !== profile.businessId))

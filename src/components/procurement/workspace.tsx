@@ -226,7 +226,7 @@ export function ProcurementWorkspace() {
         />
       ) : (
         <>
-          <form
+          <form data-portal-mutation
             className={panelClass}
             onSubmit={(e) => {
               e.preventDefault();
@@ -420,7 +420,7 @@ export function ProcurementWorkspace() {
               {!requests.length ? (
                 <p className="py-4 text-zinc-400">
                   Henüz talep yok.{" "}
-                  <a
+                  <a data-portal-mutation
                     className="underline"
                     href="/api/integrations/onedrive/start"
                   >
@@ -447,7 +447,7 @@ export function ProcurementWorkspace() {
                 >
                   PDF indir
                 </a>
-                <button
+                <button data-portal-mutation
                   className={buttonClass}
                   disabled={busy}
                   onClick={() => void sharePdf()}
@@ -455,7 +455,7 @@ export function ProcurementWorkspace() {
                   PDF paylaş (telefon)
                 </button>
                 {whatsappNumber(current.supplier.phone) ? (
-                  <a
+                  <a data-portal-mutation
                     className={buttonClass}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -488,7 +488,7 @@ export function ProcurementWorkspace() {
                     E-posta, sizin Microsoft hesabınızdan gönderilir. Gönderme
                     iznini Microsoft onay ekranında etkinleştirmeniz gerekir.
                   </p>
-                  <a
+                  <a data-portal-mutation
                     className={buttonClass}
                     href="/api/integrations/onedrive/start?mail=1"
                   >
@@ -506,7 +506,7 @@ export function ProcurementWorkspace() {
                 Alıcıyı, metni ve PDF ekini kontrol ettim; bu talebin kendi
                 e-posta hesabımdan gönderilmesini onaylıyorum.
               </label>
-              <button
+              <button data-portal-mutation
                 className={buttonClass}
                 disabled={
                   busy ||

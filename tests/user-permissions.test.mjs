@@ -110,6 +110,9 @@ test("Verified identity checks current database approval and permissions on each
       () => api.requirePortal("bank", true),
       (e) => e.status === 403,
     );
+    profile = { ...profile, role: "PARTNER", employeeId: null, employee: null, permissions: { bank: "WRITE" } };
+    assert.equal((await api.requirePortal("users")).role, "PARTNER");
+    await assert.rejects(() => api.requirePortal("bank", true), e => e.status === 403);
     profile = null;
     await assert.rejects(
       () => api.requirePortal(),
@@ -125,7 +128,7 @@ test("Verified identity checks current database approval and permissions on each
     else process.env.CLERK_SECRET_KEY = previous;
   }
 });
-function proxyFixture(user) {
+function proxyFixture(user, userId = null) {
   const api = loadTypeScript("src/proxy.ts", {
     "@clerk/nextjs/server": { clerkMiddleware: (handler) => handler },
     "@/lib/users/auth": { portalIdentity: async () => user },
@@ -145,7 +148,7 @@ function proxyFixture(user) {
     });
     request.nextUrl = url;
     request.cookies = { get: () => undefined };
-    return api.default(async () => ({ userId: null }), request);
+    return api.default(async () => ({ userId }), request);
   };
 }
 test("Anonymous requests redirect pages and return 401 for financial APIs", async () => {
@@ -277,4 +280,54 @@ test("Unapproved profiles default closed; malformed grants and owner changes cau
     assert.equal(fixture.effects.writes.length, 0);
     assert.equal(fixture.effects.identities.length, 0);
   }
+});
+
+test("Partners view every module even without grants and can never elevate stored write grants", () => {
+  for (const permissions of [{}, defaults("PARTNER"), {users:"WRITE",bank:"WRITE"}, null]) {
+    const partner = {role:"PARTNER",permissions};
+    for (const area of Object.keys(modules)) {
+      assert.equal(canAccess(partner,area),true);
+      assert.equal(canAccess(partner,area,true),false);
+    }
+    assert.equal(landing(partner),"/");
+  }
+  assert.deepEqual(Object.values(defaults("PARTNER")),Object.keys(modules).map(()=>"READ"));
+});
+test("Partner pages and GET APIs work; POST, PATCH and DELETE are denied across all modules",async()=>{
+ const proxy=proxyFixture({role:"PARTNER",permissions:{users:"WRITE",expenses:"WRITE"}});
+ for(const value of Object.values(modules)) assert.equal((await proxy(value.path)).status,200);
+ for(const route of ["users","sales","bank-accounts","bank-transactions","expenses","invoices","purchase-requests","products","employees","taxes","suppliers","documents"]){
+   assert.equal((await proxy("/api/"+route)).status,200);
+   for(const method of ["POST","PATCH","DELETE"]) assert.equal((await proxy("/api/"+route,method,{})).status,403);
+ }
+ assert.equal((await proxy("/api/documents/upload","POST",{type:"blob.generate-client-token"})).status,403);
+});
+test("Partners cannot mutate through public integration and OneDrive connection endpoints",async()=>{
+ const proxy=proxyFixture({role:"PARTNER",permissions:{}},"partner-clerk");
+ assert.equal((await proxy("/api/integrations/sumup/sync","POST",{})).status,403);
+ assert.equal((await proxy("/api/integrations/onedrive/start")).status,403);
+ assert.equal((await proxy("/api/integrations/onedrive/callback")).status,403);
+});
+test("Approved partner needs no employee link; API stores fixed read permissions and rejects escalation",async()=>{
+ const {save,effects}=usersRoute();
+ assert.equal((await save({role:"PARTNER",accessEnabled:true,permissions:{}})).status,200);
+ assert.equal(effects.writes[0].role,"PARTNER");
+ assert.equal(effects.writes[0].employeeId,null);
+ assert.equal(effects.writes[0].accessState,"ACTIVE");
+ assert.equal(Object.keys(effects.writes[0].permissions).length,Object.keys(modules).length);
+ assert.ok(Object.values(effects.writes[0].permissions).every(x=>x==="READ"));
+ for(const permissions of [{users:"WRITE"},{bank:"WRITE"}]){
+   const rejected=usersRoute();
+   assert.equal((await rejected.save({role:"PARTNER",accessEnabled:true,permissions})).status,400);
+   assert.equal(rejected.effects.writes.length,0);
+   assert.equal(rejected.effects.identities.length,0);
+ }
+});
+
+test("Partner can read the user list without a user-management write grant",async()=>{
+ const api=loadTypeScript("src/app/api/users/route.ts",{
+  "@/lib/users/auth":{requirePortal:async(area,write=false)=>{assert.equal(area,"users");assert.equal(write,false);return{email:"partner@example.test"};}},
+  "@/lib/prisma":{prisma:{business:{findFirst:async()=>({id:"business"})},portalUser:{findMany:async({where})=>{assert.equal(where.businessId,"business");return[];}}}},
+ });
+ const response=await api.GET();assert.equal(response.status,200);assert.deepEqual((await response.json()).records,[]);
 });

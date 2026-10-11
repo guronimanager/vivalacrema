@@ -342,7 +342,7 @@ export default function BankCashPage() {
               )}
             </div>
 
-            <button
+            <button data-portal-mutation
               type="button"
               onClick={syncSumUp}
               disabled={syncLoading || dataLoading}
@@ -380,7 +380,7 @@ export default function BankCashPage() {
         </div>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <form
+          <form data-portal-mutation
             onSubmit={submitAccount}
             className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
           >
@@ -493,7 +493,7 @@ export default function BankCashPage() {
             )}
           </form>
 
-          <form
+          <form data-portal-mutation
             onSubmit={submitTransaction}
             className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
           >

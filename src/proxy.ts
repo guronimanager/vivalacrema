@@ -18,6 +18,21 @@ const publicPaths = [
 ];
 export default clerkMiddleware(async (clerkAuth, request) => {
   const path = request.nextUrl.pathname;
+  // Interactive partner sessions must not use public integration routes to mutate data.
+  const partnerRestricted = path === "/api/integrations/onedrive/start" ||
+    path === "/api/integrations/onedrive/callback" ||
+    ((path.startsWith("/api/integrations/tillhub/") || path.startsWith("/api/integrations/sumup/")) && !["GET", "HEAD", "OPTIONS"].includes(request.method));
+  if (partnerRestricted) {
+    const { userId } = await clerkAuth();
+    if (userId) {
+      try {
+        const user = await portalIdentity({ userId, ownerCookie: request.cookies.get(sessionCookie)?.value || "" });
+        if (user?.role === "PARTNER") return NextResponse.json({ success: false, message: "Ortak rolü yalnızca görüntüleme yetkisine sahiptir." }, { status: 403 });
+      } catch {
+        return NextResponse.json({ success: false, message: "Erişim yetkiniz doğrulanamadı." }, { status: 403 });
+      }
+    }
+  }
   // Existing machine integrations and signed Blob callbacks keep their own validation.
   if (
     publicPaths.includes(path) ||
