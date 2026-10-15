@@ -1,4 +1,6 @@
 "use client";
+import { OneDriveInventory } from "@/components/documents/inventory";
+import { runDocumentBatch } from "@/lib/document-batch";
 import { checkExistingDocument } from "@/lib/document-check";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { upload } from "@vercel/blob/client";
@@ -101,6 +103,8 @@ export function InvoiceWorkspace({
 }: {
   onSaved: () => Promise<void>;
 }) {
+  const uploadLock = useRef(false);
+  const [uploadResults, setUploadResults] = useState<{ name: string; status: string; document?: Document }[]>([]);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentId, setDocumentId] = useState("");
@@ -199,33 +203,30 @@ export function InvoiceWorkspace({
     });
     setWarnings(document.dateNeedsReview ? ["OneDrive’dan tanınan bu belgenin gerçek tarihini OCR ile veya elle doğrulayın. Arşiv ayı belge tarihi değildir."] : []);
   }
-  async function uploadFile(file?: File) {
-    if (!file) return;
-    if (
-      file.size > 10 * 1024 * 1024 ||
-      !["application/pdf", "image/jpeg", "image/png"].includes(file.type)
-    ) {
-      setError(
-        "En fazla 10 MB PDF, JPEG veya PNG seçin. HEIC fotoğrafı JPEG olarak dışa aktarın.",
-      );
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setMessage("");
+  async function refreshDocuments() {
+    const data = await api("/api/documents");
+    setDocuments(data.documents.filter((document: Document) => ["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(document.kind)));
+  }
+  async function uploadFiles(selected: File[]) {
+    if (!selected.length || uploadLock.current) return;
+    uploadLock.current = true;
+    setBusy(true); setError(""); setMessage("");
+    setUploadResults(selected.map(file => ({ name: file.name, status: "Sırada" })));
+    const metadataBase = { kind: draft.kind, entity: selected.length === 1 ? draft.supplierName || "Fatura kontrolü bekliyor" : "Fatura kontrolü bekliyor", date: selected.length === 1 ? draft.date || today() : today() };
+    let first: Document | undefined;
+    let uploaded = 0, duplicates = 0, failed = 0;
     try {
+      await runDocumentBatch(selected, async file => {
+        if (file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png"].includes(file.type)) throw new Error("En fazla 10 MB PDF, JPEG veya PNG seçin. HEIC fotoğrafı JPEG olarak dışa aktarın.");
       const existing = await checkExistingDocument(file, archivePeriod, archiveFolder);
       if (existing.duplicate) {
         if (!["INVOICE_SERVICE", "INVOICE_MATERIAL"].includes(existing.document.kind)) throw new Error("Bu dosya arşivde başka belge türünde mevcut. Evrak Arşivi’nden kaydı kontrol edin.");
-        setDocuments(items => [existing.document, ...items.filter(item => item.id !== existing.document.id)]);
-        selectDocument(existing.document);
-        setMessage("Bu evrak zaten mevcut; yeniden yüklenmedi. Mevcut belgeyle fatura ve ödeme kontrolüne devam edin.");
-        return;
+        return { document: existing.document as Document, duplicate: true };
       }
       const metadata = validateMetadata({
-        kind: draft.kind,
-        entity: draft.supplierName || "Fatura kontrolü bekliyor",
-        date: draft.date || today(),
+        kind: metadataBase.kind,
+        entity: metadataBase.entity,
+        date: metadataBase.date,
         originalName: file.name,
         archiveFolder,
         archivePeriod,
@@ -251,21 +252,22 @@ export function InvoiceWorkspace({
         metadata,
         sync: false,
       });
-      setDocuments((items) => [
-        data.document,
-        ...items.filter((item) => item.id !== data.document.id),
-      ]);
-      selectDocument(data.document);
-      setMessage(
-        "Belge yüklendi. OCR ile oku veya alanları doldur; fatura onayında OneDrive’a aktarılır.",
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Yükleme tamamlanamadı.",
-      );
-    } finally {
-      setBusy(false);
-    }
+      return { document: data.document as Document, duplicate: Boolean(data.duplicate) };
+      }, (index, result) => {
+        if (result.success) {
+          const { document, duplicate } = result.value;
+          if (!first) first = document;
+          if (duplicate) duplicates++; else uploaded++;
+          setDocuments(items => [document, ...items.filter(item => item.id !== document.id)]);
+          setUploadResults(items => items.map((item, i) => i === index ? { ...item, document, status: duplicate ? "Zaten mevcut — ikinci kayıt oluşturulmadı" : "Yüklendi — fatura kontrolü bekliyor" } : item));
+        } else {
+          failed++;
+          setUploadResults(items => items.map((item, i) => i === index ? { ...item, status: `Yüklenemedi: ${result.message}` } : item));
+        }
+      });
+      if (first) selectDocument(first);
+      setMessage(`${uploaded} belge yüklendi, ${duplicates} belge zaten mevcut, ${failed} belge yüklenemedi. Belgeleri tek tek kontrol edip onaylayın; henüz yeni gider kaydı oluşturulmadı.`);
+    } finally { uploadLock.current = false; setBusy(false); }
   }
   async function importLink() {
     setBusy(true);
@@ -426,6 +428,7 @@ export function InvoiceWorkspace({
       <Notice error={error} message={message} />
       {connected ? (
         <>
+          <OneDriveInventory onRegistered={refreshDocuments} disabled={busy} onBusyChange={setBusy} />
           <div data-portal-mutation className={panelClass}>
             <h3 className="text-lg font-semibold">1. Belgeyi ekle</h3>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -437,23 +440,28 @@ export function InvoiceWorkspace({
                   disabled={busy}
                   className={inputClass}
                   onChange={(event) => {
-                    void uploadFile(event.target.files?.[0]);
+                    void uploadFiles(Array.from(event.target.files || []));
                     event.target.value = "";
                   }}
                 />
               </Field>
-              <Field label="PDF veya fotoğraf yükle">
+              <Field label="PDF veya fotoğraf yükle (birden fazla seçilebilir)">
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
+                  multiple
                   disabled={busy}
                   className={inputClass}
                   onChange={(event) => {
-                    void uploadFile(event.target.files?.[0]);
+                    void uploadFiles(Array.from(event.target.files || []));
                     event.target.value = "";
                   }}
                 />
               </Field>
+              <div className="md:col-span-2">
+                <p className="text-sm text-zinc-400">Birden fazla PDF/fotoğraf seçebilirsiniz. Dosya başına en fazla 10 MB. Seçilen arşiv ayı ve klasörü tüm dosyalara uygulanır; her faturanın bilgileri ayrı onaylanır. Hata veren dosyayı tekrar seçerek deneyebilirsiniz.</p>
+                {uploadResults.length ? <ul aria-live="polite" className="mt-3 divide-y divide-zinc-800">{uploadResults.map((item, index) => <li key={index} className="py-2 text-sm"><p>{item.name} · {item.status}</p>{item.document ? <button type="button" disabled={busy} className="mt-1 underline" onClick={() => selectDocument(item.document!)}>Faturayı kontrol et</button> : null}</li>)}</ul> : null}
+              </div>
               <label className="block text-sm text-zinc-400">
                 Arşiv yılı ve ayı
                 <input type="month" min="1900-01" max="2199-12" required
@@ -465,6 +473,7 @@ export function InvoiceWorkspace({
                 <select
                   className={inputClass}
                   value={archiveFolder}
+                  disabled={busy}
                   onChange={(event) =>
                     setArchiveFolder(event.target.value as ArchiveFolder)
                   }
