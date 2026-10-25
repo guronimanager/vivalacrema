@@ -4,6 +4,8 @@ import { sessionCookie } from "@/lib/onedrive/security";
 import { portalIdentity } from "@/lib/users/auth";
 import { canAccess, moduleForPath } from "@/lib/users/permissions";
 const publicPaths = [
+  "/manifest.webmanifest",
+  "/sw.js",
   "/giris",
   "/yetkisiz",
   "/evraklarim",
@@ -98,7 +100,7 @@ export default clerkMiddleware(async (clerkAuth, request) => {
 });
 export const config = {
   matcher: [
-    "/((?!_next|favicon.ico|.*\\.(?:css|js|png|jpg|jpeg|svg|woff2?)$).*)",
+    "/((?!_next|favicon.ico|manifest\\.webmanifest$|.*\\.(?:css|js|png|jpg|jpeg|svg|woff2?)$).*)",
     "/api/:path*",
   ],
 };

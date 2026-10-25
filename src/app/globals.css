@@ -29,3 +29,9 @@ body {
 [data-portal-readonly="true"] [data-portal-mutation] {
   display: none !important;
 }
+
+@media (max-width: 767px) {
+  body:has([data-mobile-navigation]) {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}

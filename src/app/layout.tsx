@@ -1,6 +1,7 @@
 import { PortalReadOnly } from "@/components/users/read-only";
 import { ClerkProvider } from "@clerk/nextjs";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { AppSupport } from "@/components/pwa/app-support";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,7 +18,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Viva La Crema | İşletme Yönetimi",
   description: "Viva La Crema satış, gider ve finans yönetimi",
+  applicationName: "Viva La Crema",
+  appleWebApp: { capable: true, title: "Viva La Crema", statusBarStyle: "default" },
+  icons: { icon: "/icons/app-192.png", apple: "/icons/apple-touch-icon.png" },
+  formatDetection: { telephone: false },
 };
+
+export const viewport: Viewport = { themeColor: "#09090b", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -25,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="tr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col"><ClerkProvider><PortalReadOnly>{children}</PortalReadOnly></ClerkProvider></body>
+      <body className="min-h-full flex flex-col"><ClerkProvider><AppSupport /><PortalReadOnly>{children}</PortalReadOnly></ClerkProvider></body>
     </html>
   );
 }

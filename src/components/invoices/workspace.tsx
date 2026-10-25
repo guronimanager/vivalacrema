@@ -104,6 +104,7 @@ export function InvoiceWorkspace({
   onSaved: () => Promise<void>;
 }) {
   const uploadLock = useRef(false);
+  const uploadSection = useRef<HTMLDivElement>(null);
   const [uploadResults, setUploadResults] = useState<{ name: string; status: string; document?: Document }[]>([]);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -190,6 +191,11 @@ export function InvoiceWorkspace({
       cancelled = true;
     };
   }, []);
+  useEffect(() => {
+    if (connected && window.location.hash === "#belge-yukle") {
+      uploadSection.current?.scrollIntoView({ block: "start" });
+    }
+  }, [connected]);
   function selectDocument(document: Document) {
     setDocumentId(document.id);
     setArchivePeriod(document.archivePeriod || document.date.slice(0, 7));
@@ -429,7 +435,7 @@ export function InvoiceWorkspace({
       {connected ? (
         <>
           <OneDriveInventory onRegistered={refreshDocuments} disabled={busy} onBusyChange={setBusy} />
-          <div data-portal-mutation className={panelClass}>
+          <div id="belge-yukle" ref={uploadSection} data-portal-mutation className={`${panelClass} scroll-mt-4`}>
             <h3 className="text-lg font-semibold">1. Belgeyi ekle</h3>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field label="Telefondan fotoğraf çek / tara">
