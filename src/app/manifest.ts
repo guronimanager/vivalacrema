@@ -13,9 +13,9 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#09090b",
     theme_color: "#09090b",
     icons: [
-      { src: "/icons/app-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icons/app-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icons/app-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icons/viva-la-crema-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/viva-la-crema-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/viva-la-crema-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "Viva La Crema satış, gider ve finans yönetimi",
   applicationName: "Viva La Crema",
   appleWebApp: { capable: true, title: "Viva La Crema", statusBarStyle: "default" },
-  icons: { icon: "/icons/app-192.png", apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: "/icons/viva-la-crema-192.png", apple: "/icons/viva-la-crema-apple-180.png" },
   formatDetection: { telephone: false },
 };
 
